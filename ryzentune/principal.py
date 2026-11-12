@@ -69,7 +69,7 @@ def _autoteste(log) -> int:
         assert motor.validar_perfil(motor.PADRAO_MEM) == []
         assert hardware.classificar_cpu("AMD Ryzen 7 5700X3D 8-Core Processor", 8).suporta_co
         assert testes.carga_referencia() == testes.carga_referencia()
-        for arq in ("index.html", "estilo.css", "app.js"):
+        for arq in ("index.html", "estilo.css", "app.js", "assistente.js"):
             assert os.path.isfile(os.path.join(_pasta_web(), arq)), arq
         for arq in ("AMDFamily17.bin", "RyzenSMU.bin", "SmbusPIIX4.bin"):
             from .pawnio import pasta_recursos

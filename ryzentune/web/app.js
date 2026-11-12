@@ -6,7 +6,7 @@ const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const S = { init: null, estado: null, leitura: null, vivo: null, teste: null, traco: [], pagina: "painel" };
+const S = { init: null, estado: null, leitura: null, vivo: null, teste: null, traco: [], pagina: "assistente" };
 let api = null;
 
 const NOMES = {
@@ -73,7 +73,7 @@ function irPara(p) {
   $$(".pagina").forEach((s) => s.classList.toggle("ativa", s.id === `pagina-${p}`));
   $("main").scrollTop = 0;
   if (p === "memoria" || p === "processador") lerTimings();
-  if (p === "memoria") identificarChip();
+  if (p === "memoria" || p === "assistente") identificarChip();
 }
 
 /* ---------------------------------------------------------------- abertura */
@@ -103,6 +103,7 @@ async function iniciar() {
   const inicial = location.hash.slice(1);
   if (inicial && $(`#pagina-${inicial}`)) irPara(inicial);
   lerTimings();
+  identificarChip();
   laçoVivo();
   laçoTeste();
   if (S.estado.config.verificar_atualizacao) verificarAtualizacao(false);
@@ -155,11 +156,14 @@ async function lerTimings() {
   else S.leitura = { erro: r ? r.erro : "sem resposta" };
   desenharMemoria();
   desenharCpu();
+  desenharAssistente();
 }
 
 /* ---------------------------------------------------------------- desenho geral */
 function desenhar() {
   if (!S.init) return;
+  document.documentElement.dataset.avancado = S.estado.config.avancado ? "on" : "off";
+  desenharAssistente();
   desenharPainel();
   desenharMemoria();
   desenharCpu();
@@ -489,6 +493,7 @@ async function laçoTeste() {
         desenharPainelTeste();
         desenharTeste($("#etapa-teste"), s);
         desenharTeste($("#cpu-teste"), s);
+        if (S.pagina === "assistente") { if ($("#ass-teste")) desenharTeste($("#ass-teste"), s); else desenharAssistente(); }
         if (estavaRodando && !s.rodando) {
           aviso(s.resultado === "passou" ? "Teste concluído sem erros." : s.resultado === "falhou" ? `O teste falhou. ${s.msg || ""}` : "Teste parado.",
             s.resultado === "passou" ? "ok" : s.resultado === "falhou" ? "erro" : "");
@@ -516,6 +521,7 @@ function desenharAjustes() {
   const c = S.estado.config;
   $("#cfg-atualizar").checked = !!c.verificar_atualizacao;
   $("#cfg-animacoes").checked = c.animacoes !== false;
+  $("#cfg-avancado").checked = !!c.avancado;
   const d = S.init.driver;
   $("#ficha-driver").innerHTML = [["Driver PawnIO", d.instalado ? `Instalado (${d.versao || "versão ?"})` : "Não instalado"],
     ["Acesso", d.ok ? "Funcionando" : `Indisponível${d.erro ? `: ${d.erro}` : ""}`],
@@ -579,6 +585,7 @@ function ligarEventos() {
   $("#t-mem").onclick = () => iniciarTesteMem(+$("#t-mem-min").value, +$("#t-mem-pct").value);
   $("#t-cpu").onclick = () => iniciarTesteCpu(+$("#t-cpu-seg").value);
   $("#cfg-atualizar").onchange = (e) => chamar("config", "verificar_atualizacao", e.target.checked);
+  $("#cfg-avancado").onchange = (e) => chamar("config", "avancado", e.target.checked);
   $("#cfg-animacoes").onchange = async (e) => { await chamar("config", "animacoes", e.target.checked); aplicarAnimacoes(); };
   $("#cfg-verificar").onclick = () => verificarAtualizacao(true);
   $("#cfg-pasta").onclick = () => chamar("abrir_pasta_dados");

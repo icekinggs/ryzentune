@@ -59,7 +59,7 @@ def rotina(io) -> int | None:
                 ct["situacao"] = "ativo"
                 ct["desde"] = motor.agora_iso()
                 estado.registrar(e, "CPU", f"Curve Optimizer {ct['valor']} ativado neste boot.", log)
-            elif ct["situacao"] == "ativo":
+            elif ct["situacao"] in ("ativo", "observando"):
                 k41, whea = io.eventos_desde(ct["desde"])
                 if k41 > 0 or whea > 0:
                     estado.registrar(e, "CPU", motor.falhar_cpu(

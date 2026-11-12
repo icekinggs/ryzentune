@@ -26,6 +26,17 @@ export function criarDemo() {
       { quando: "2026-11-12T20:20:00", tipo: "Memória", texto: "FALHOU 'tCL (latência CAS)': 12 erro(s) no teste. Limite encontrado; fica o último estável." },
     ],
   };
+  // cenários para conferir as telas do assistente: index.html?demo=inicio | preparada | testar | pronta | obs
+  const cenario = new URLSearchParams(location.search).get("demo") || "preparada";
+  const m = estado.mem;
+  if (cenario === "inicio") { m.confirmado = false; m.teste = null; }
+  if (cenario === "testar") m.teste.situacao = "testar";
+  if (cenario === "pronta") { m.teste = null; m.feitos = ["freq", "tCL", "tRCDRD", "tRCDWR", "tRP", "tRAS", "tRFC", "grupoRRD", "grupoWTR", "tWR"]; }
+  if (cenario === "obs") {
+    m.teste = null; m.feitos = ["freq"];
+    estado.cpu.teste = { valor: -20, situacao: "observando", desde: "2026-11-12T08:00:00", desde_obs: new Date(Date.now() - 9 * 36e5).toISOString() };
+  }
+  estado.historico.push({ quando: "2026-11-12T20:40:00", tipo: "Memória", texto: "PASSOU 'tCL (latência CAS)'. Novo estável: 3600 MT/s CL16-19-19-36." });
   let t = 52;
   let teste = { rodando: false };
   const ok = (x = {}) => Promise.resolve({ ok: true, estado, ...x });

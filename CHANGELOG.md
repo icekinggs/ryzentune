@@ -3,6 +3,21 @@
 Formato: cada versão tem uma seção `## [X.Y.Z] - AAAA-MM-DD`. O texto da seção vira a descrição da
 release no GitHub e aparece no aviso de atualização do app.
 
+## [2.1.0] - 2026-11-12
+
+Muito mais simples de usar.
+
+- O app abre num assistente que diz, em uma frase, o que fazer agora, com um botão só. Ele sabe sozinho em que
+  ponto você está, inclusive depois de reiniciar.
+- Duas trilhas: Memória e Processador. As telas técnicas (timings, testes avulsos) ficam no modo avançado, em
+  Ajustes.
+- Os nomes técnicos vêm explicados em português ("Tempo para abrir uma linha"), com o nome da BIOS ao lado.
+- A tabela do que digitar na BIOS compara com o que está rodando agora no hardware. Depois de uma falha, ela mostra
+  exatamente o que mudou, inclusive quando a placa voltou ao padrão.
+- Processador: depois do teste dos núcleos, basta usar o PC. Se ficar 24 horas sem travar, o valor é confirmado
+  sozinho; se travar, volta sozinho ao anterior.
+- No fim, uma tela de resumo com antes e depois.
+
 ## [2.0.0] - 2026-11-12
 
 Tudo dentro do app, com interface nova.

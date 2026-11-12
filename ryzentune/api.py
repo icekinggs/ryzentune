@@ -99,6 +99,7 @@ class Api:
             d["codinome"] = codinome
             e["cpu"]["perfil"] = d
             e["config"]["placa"] = fab
+            self._confirmar_cpu_se_pronto(e)
         with estado.transacao() as e:
             aplicar(e)
         inicio = (dt.datetime.now() - dt.timedelta(days=14)).replace(microsecond=0).isoformat()
@@ -164,7 +165,7 @@ class Api:
 
     @_seguro
     def config(self, chave, valor):
-        if chave not in ("verificar_atualizacao", "animacoes", "versao_ignorada"):
+        if chave not in ("verificar_atualizacao", "animacoes", "versao_ignorada", "avancado"):
             return {"erro": "configuração desconhecida"}
         return self._acao(lambda e: e["config"].__setitem__(chave, valor))
 
@@ -398,6 +399,17 @@ class Api:
             return v
         return self._acao(f)
 
+    def _confirmar_cpu_se_pronto(self, e):
+        """Depois de 24 h de uso normal sem travar, o valor em observação vira o novo estável."""
+        if not motor.observacao_completa(e):
+            return
+        t = e["cpu"]["teste"]
+        k41, whea = sistema.eventos_desde(t["desde"])
+        if k41 > 0 or whea > 0:
+            self._reg(e, "CPU", motor.falhar_cpu(e, f"{k41} travamento(s) e {whea} erro(s) WHEA durante o uso"))
+        elif k41 == 0 and whea == 0:
+            self._reg(e, "CPU", motor.passar_cpu(e) + f" Confirmado depois de {motor.HORAS_OBSERVACAO} h sem travar.")
+
     @_seguro
     def cpu_reiniciar(self):
         ok, msg = sistema.reiniciar(bios=False)
@@ -471,7 +483,10 @@ class Api:
                 if r.get("resultado") == "passou":
                     self.memoria_medir()  # registra a banda do novo perfil estável
             elif s["tipo"] == "nucleos" and e["cpu"]["teste"] and e["cpu"]["teste"]["situacao"] == "ativo":
-                self.cpu_resultado(passou, motivo)
+                if passou:
+                    self._acao(lambda e: self._reg(e, "CPU", motor.observar_cpu(e)))
+                else:
+                    self.cpu_resultado(False, motivo)
         except Exception:
             log.error("registrar resultado do teste:\n%s", traceback.format_exc())
 

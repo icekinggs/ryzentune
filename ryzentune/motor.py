@@ -329,6 +329,26 @@ def falhar_cpu(e: dict, motivo: str) -> str:
     return f"FALHOU Curve Optimizer {v}: {motivo}. Voltando para {c['estavel']}."
 
 
+HORAS_OBSERVACAO = 24
+
+
+def observar_cpu(e: dict) -> str:
+    """O teste de núcleos passou: agora o app só observa o uso normal antes de confirmar."""
+    t = e["cpu"]["teste"]
+    t["situacao"] = "observando"
+    t["desde_obs"] = agora_iso()
+    return (f"Curve Optimizer {t['valor']} passou no teste de núcleos. Agora é usar o PC normalmente: "
+            f"sem travar por {HORAS_OBSERVACAO} h, ele é confirmado sozinho.")
+
+
+def observacao_completa(e: dict, agora: dt.datetime | None = None) -> bool:
+    t = e["cpu"]["teste"]
+    if not t or t.get("situacao") != "observando":
+        return False
+    inicio = dt.datetime.fromisoformat(t["desde_obs"])
+    return ((agora or dt.datetime.now()) - inicio).total_seconds() >= HORAS_OBSERVACAO * 3600
+
+
 def valor_co_no_boot(e: dict) -> int:
     c = e["cpu"]
     if not c["perfil"].get("suporta_co"):
