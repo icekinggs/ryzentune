@@ -3,6 +3,19 @@
 Formato: cada versão tem uma seção `## [X.Y.Z] - AAAA-MM-DD`. O texto da seção vira a descrição da
 release no GitHub e aparece no aviso de atualização do app.
 
+## [2.2.0] - 2026-11-12
+
+Telas novas no assistente da memória.
+
+- Início: uma ficha do seu PC (processador, placa, memória e velocidade de hoje) e a previsão do chip.
+- "Mude na BIOS": o ajuste principal aparece grande e o resto vem numa grade numerada, que cabe numa foto do
+  celular.
+- Teste de memória com anel de progresso, erros, velocidade e tempo restante no próprio assistente.
+- Resultado final com barras de antes e agora (velocidade, tempo de resposta e banda) e o atalho para ajustar o
+  processador.
+- A velocidade atual passa a vir do registrador da memória; a tabela de energia só é usada quando confere com ele.
+- Telas próprias para "lendo", "não consegui ler" e "a BIOS já está com esses valores".
+
 ## [2.1.1] - 2026-11-12
 
 Visual mais organizado.

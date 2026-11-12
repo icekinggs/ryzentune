@@ -493,7 +493,7 @@ async function laçoTeste() {
         desenharPainelTeste();
         desenharTeste($("#etapa-teste"), s);
         desenharTeste($("#cpu-teste"), s);
-        if (S.pagina === "assistente") { if ($("#ass-teste")) desenharTeste($("#ass-teste"), s); else desenharAssistente(); }
+        if (S.pagina === "assistente") { if ($("#ass-teste") && s.rodando) { if (s.tipo === "memoria") desenharTesteAssistente($("#ass-teste"), s); else desenharTeste($("#ass-teste"), s); } else desenharAssistente(); }
         if (estavaRodando && !s.rodando) {
           aviso(s.resultado === "passou" ? "Teste concluído sem erros." : s.resultado === "falhou" ? `O teste falhou. ${s.msg || ""}` : "Teste parado.",
             s.resultado === "passou" ? "ok" : s.resultado === "falhou" ? "erro" : "");

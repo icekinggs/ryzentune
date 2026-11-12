@@ -53,8 +53,11 @@ function valoresParaDigitar(perfil) {
   const atual = { ...m.estavel };
   if (t) {
     Object.keys(TERMOS).forEach((k) => { if (k in t) atual[k] = t[k]; });
-    atual.freq = pm.mclk ? Math.round(pm.mclk * 2) : t.mts_ratio;
-    if (pm.fclk) atual.fclk = Math.round(pm.fclk);
+    // O registrador (mts_ratio) é exato. A tabela de energia às vezes vem deslocada (ex.: 1708 em vez de 1600 MHz):
+    // se as duas discordarem em mais de 3%, a tabela é ignorada e o FCLK fica com o último valor salvo.
+    const pmConfere = pm.mclk && t.mts_ratio && Math.abs(pm.mclk * 2 / t.mts_ratio - 1) < 0.03;
+    atual.freq = t.mts_ratio || (pm.mclk ? Math.round(pm.mclk * 2) : atual.freq);
+    if (pm.fclk && pmConfere) atual.fclk = Math.round(pm.fclk);
   }
   return Object.keys(TERMOS)
     .filter((k) => !(k === "fclk" && !perfil.fclk))
@@ -67,6 +70,140 @@ function tabelaValores(lista) {
     lista.map(({ k, de, para }) => `<tr><td><span class="nome-simples">${esc(TERMOS[k][0])}</span><span class="nome-bios">na BIOS: ${esc(TERMOS[k][1])}</span></td>
       <td class="de">${esc(fmt(k, de))}</td><td class="para">${esc(fmt(k, para))} <small>${esc(UN[k] || "")}</small></td></tr>`).join("")
   }</tbody></table>`;
+}
+
+/* ---------------------------------------------------------------- peças das telas novas */
+const PRINCIPAIS = { freq: ["freq", "fclk"], grupoRRD: ["tRRDS", "tRRDL", "tFAW"], grupoWTR: ["tWTRS", "tWTRL"], tWR: ["tWR", "tRTP"] };
+const TELA_OC = ["freq", "fclk", "vdram", "vsoc", "gdm"];
+const ICONE = {
+  cpu: '<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/>',
+  placa: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 7h4v4H7zM14 7h3M14 10h3M7 15h10M7 18h6"/>',
+  ram: '<rect x="3" y="7" width="18" height="10" rx="1"/><path d="M7 7v10M11 7v10M15 7v10M6 17v3M18 17v3"/>',
+  vel: '<path d="M4 15a8 8 0 0 1 16 0"/><path d="M12 15l4-5"/><path d="M4 19h16"/>',
+};
+/* nomes curtos para a grade da BIOS: cabem numa linha ao lado da sigla */
+const CURTO_BIOS = {
+  freq: "Velocidade da memória", fclk: "Barramento interno", vdram: "Tensão da memória", vsoc: "Tensão do controlador",
+  gdm: "Modo GearDown", tCL: "Atraso de leitura", tRCDRD: "Abrir uma linha (leitura)", tRCDWR: "Abrir uma linha (escrita)",
+  tRP: "Fechar uma linha", tRAS: "Linha aberta, mínimo", tRC: "Ciclo completo da linha", tRFC: "Recarga da memória",
+  tRRDS: "Ativações, outro grupo", tRRDL: "Ativações, mesmo grupo", tFAW: "Janela de 4 ativações",
+  tWTRS: "Escrever → ler, outro grupo", tWTRL: "Escrever → ler, mesmo grupo", tWR: "Recuperar após escrever",
+  tRTP: "Ler → fechar a linha", tCWL: "Atraso de escrita",
+};
+const nomeCurtoBios = (k) => `${esc(CURTO_BIOS[k] || TERMOS[k][0])} <span class="sigla">${esc(TERMOS[k][1])}</span>`;
+const nomeComBios = (k) => `${esc(TERMOS[k][0])} <span class="sigla">${esc(TERMOS[k][1])}</span>`;
+const valorOuNada = (k, v) => (v == null || v === "" ? '<span class="nao-lido">?</span>' : esc(fmt(k, v)));
+
+function nomeCpuCurto(nome) {
+  return String(nome || "Processador").replace(/^AMD\s+/, "").replace(/\s+\d+-Core Processor$/i, "").trim();
+}
+
+/* Ficha do PC: 4 peças. Cada uma aceita texto, "carregando" (null) ou falta de leitura (""). */
+function fichaPc({ mts, tCL, carregando }) {
+  const hw = S.init.hw || {}, cpu = S.init.cpu || {}, c = S.estado.mem.chip;
+  const pecas = [
+    ["cpu", "Processador", nomeCpuCurto(hw.cpu || cpu.nome), `${hw.nucleos || cpu.nucleos || "?"} núcleos${cpu.codinome ? `, ${cpu.codinome}` : ""}`],
+    ["placa", "Placa-mãe", `${S.init.placa || ""} ${String(hw.placa || "").replace(/\s*\(.*\)$/, "")}`.trim() || "Não identificada", hw.bios ? `BIOS ${hw.bios}` : ""],
+    ["ram", "Memória", hw.pentes ? `${hw.pentes} × ${Math.round(hw.gb / hw.pentes)} GB` : "Pentes não encontrados",
+      c?.nome || "Chip não identificado"],
+    ["vel", "Rodando hoje", carregando ? null : mts ? `${mts} MT/s` : "", carregando ? null : tCL ? `Atraso de leitura (tCL) ${tCL}` : "Não consegui ler"],
+  ];
+  return `<ul class="ficha-pc">${pecas.map(([ic, rot, val, sub]) => `<li class="${val === "" ? "falta" : ""}">
+      <svg viewBox="0 0 24 24" aria-hidden="true">${ICONE[ic]}</svg>
+      <span class="rot">${rot}</span>
+      <b>${val == null ? '<span class="lendo">Lendo…</span>' : esc(val || "Não lido")}</b>
+      <span class="sub">${sub == null ? "&nbsp;" : esc(sub)}</span></li>`).join("")}</ul>`;
+}
+
+/* "Digite na BIOS": o ajuste principal grande e o resto numa grade numerada que cabe numa foto. */
+function listaBios(lista, passo) {
+  const chaves = PRINCIPAIS[passo] || [passo];
+  const principal = lista.filter((x) => chaves.includes(x.k));
+  const resto = lista.filter((x) => !chaves.includes(x.k));
+  let n = 0;
+  const item = ({ k, de, para }) => `<li><i>${++n}</i><span class="nome">${nomeCurtoBios(k)}</span>
+      <span class="de">${valorOuNada(k, de)}</span><span class="para">${esc(fmt(k, para))}</span></li>`;
+  const grupo = (titulo, itens) => (itens.length ? `<h4>${titulo}</h4><ol class="bios-grade">${itens.map(item).join("")}</ol>` : "");
+  const topo = principal.map(({ k, de, para }) => `<div class="bios-principal-item"><i>${++n}</i>
+      <span class="nome">${nomeComBios(k)}</span>
+      <span class="troca"><span class="de">${valorOuNada(k, de)}</span><span class="seta" aria-label="mude para">→</span>
+      <b>${esc(fmt(k, para))}</b><small>${esc(UN[k] || "")}</small></span></div>`).join("");
+  return `${topo ? `<div class="bios-principal">${topo}</div>` : ""}
+    ${resto.length ? `<p class="bios-resto">${principal.length ? `Os outros ${resto.length} acompanham a mudança.` : ""} Digite cada um no campo com o nome em destaque.</p>` : ""}
+    ${grupo("Frequência e tensões", resto.filter((x) => TELA_OC.includes(x.k)))}
+    ${grupo("Timings", resto.filter((x) => !TELA_OC.includes(x.k)))}`;
+}
+
+/* Teste de memória dentro do assistente: monta uma vez e depois só atualiza os números (o anel desliza). */
+const ANEL_C = 2 * Math.PI * 88;
+function desenharTesteAssistente(alvo, s) {
+  if (!alvo) return;
+  if (!alvo.firstElementChild) {
+    alvo.innerHTML = `<div class="teste-ass">
+        <div class="teste-anel">
+          <svg viewBox="0 0 200 200" aria-hidden="true"><circle class="fundo" cx="100" cy="100" r="88"/>
+            <circle class="valor" cx="100" cy="100" r="88" style="stroke-dasharray:${ANEL_C.toFixed(1)}px;stroke-dashoffset:${ANEL_C.toFixed(1)}px"/></svg>
+          <div class="centro"><b data-t="pct">0%</b><span data-t="resta"></span></div>
+        </div>
+        <dl class="teste-numeros">
+          <div data-t="caixa-erros"><dt>Erros encontrados</dt><dd data-t="erros">0</dd><span data-t="erros-nota">Zero é o esperado</span></div>
+          <div><dt>Velocidade de leitura e escrita</dt><dd><span data-t="gbps">--</span> <small>GB/s</small></dd><span data-t="ciclo"></span></div>
+          <div><dt>Memória em teste</dt><dd><span data-t="gb">--</span> <small>GB</small></dd><span data-t="padrao"></span></div>
+        </dl>
+      </div>
+      <p class="teste-aviso" data-t="aviso" role="status"></p>
+      <button class="link perigo" data-t="parar">Parar o teste</button>`;
+    alvo.querySelector('[data-t="parar"]').onclick = async () => {
+      if (await confirmar("Parar o teste", "O ajuste continua esperando um teste completo. Você pode começar de novo depois.", "Parar")) chamar("teste_parar");
+    };
+  }
+  const q = (k) => alvo.querySelector(`[data-t="${k}"]`);
+  const f = Math.max(0, Math.min(1, s.fracao || 0)), erros = s.erros || 0, reservando = !s.padrao && f === 0;
+  const anel = alvo.querySelector(".teste-anel .valor");
+  anel.style.strokeDashoffset = `${(ANEL_C * (1 - f)).toFixed(1)}px`;
+  alvo.querySelector(".teste-ass").classList.toggle("com-erro", erros > 0);
+  q("pct").textContent = reservando ? "--" : `${Math.round(f * 100)}%`;
+  const min = Math.ceil((s.minutos || 30) * (1 - f));
+  q("resta").textContent = reservando ? "preparando" : s.rodando ? (min <= 1 ? "falta menos de 1 min" : `faltam ${min} min`) : "concluído";
+  q("erros").textContent = erros;
+  q("erros-nota").textContent = erros ? "Este valor não aguentou" : "Zero é o esperado";
+  q("gbps").textContent = s.gbps ? Number(s.gbps).toFixed(1).replace(".", ",") : "--";
+  q("ciclo").textContent = s.ciclo ? `Volta ${s.ciclo} pela memória` : "";
+  q("gb").textContent = s.mb ? (s.mb / 1024).toFixed(1).replace(".", ",") : "--";
+  q("padrao").textContent = s.padrao ? `Padrão ${s.padrao}` : "";
+  q("aviso").textContent = erros
+    ? `Encontrou ${erros} ${erros === 1 ? "erro" : "erros"}. Este valor não é estável: o RyzenTune volta para o último que passou e tenta um intermediário.`
+    : reservando ? `Reservando ${s.mb ? `${(s.mb / 1024).toFixed(1).replace(".", ",")} GB` : "a memória livre"}. Isso leva alguns segundos.`
+    : "Pode deixar o PC sozinho. Não abra jogos nem programas pesados até terminar.";
+  q("aviso").className = `teste-aviso${erros ? " erro" : ""}`;
+  q("parar").hidden = !s.rodando;
+}
+
+/* Resultado: três medidas, antes e depois, com a direção do que é melhor. */
+let medindo = false, erroMedir = "";
+async function medirDeNovo() {
+  medindo = true; erroMedir = ""; desenharAssistente();
+  const r = await api.memoria_medir().catch((ex) => ({ erro: String(ex) }));
+  medindo = false;
+  if (!r || r.erro) erroMedir = r ? r.erro : "sem resposta";
+  else if (r.estado) S.estado = r.estado;
+  desenharAssistente();
+}
+
+function linhaComparacao(rotulo, sigla, antes, depois, un, casas, menorMelhor, estado = "") {
+  const tem = antes != null && depois != null;
+  const ganho = tem ? ((menorMelhor ? antes / depois : depois / antes) - 1) * 100 : null;
+  const max = tem ? Math.max(antes, depois) : 1;
+  const num = (v) => (v == null ? "--" : Number(v).toFixed(casas).replace(".", ","));
+  const etiqueta = estado ? `<span class="ganho-tag neutro">${estado}</span>`
+    : ganho == null ? '<span class="ganho-tag neutro">sem medida</span>'
+    : `<span class="ganho-tag ${ganho >= 0.5 ? "melhor" : ganho <= -0.5 ? "pior" : "neutro"}">${ganho >= 0.5 ? "+" : ""}${Math.round(ganho)}% ${ganho >= 0.5 ? "melhor" : ganho <= -0.5 ? "pior" : "igual"}</span>`;
+  return `<li><div class="cmp-rotulo"><b>${rotulo}</b><span>${sigla}</span></div>
+    <div class="cmp-barras">
+      <div class="cmp-linha antes"><span>Antes</span><i style="width:${tem ? (antes / max) * 100 : 0}%"></i><b>${num(antes)}</b></div>
+      <div class="cmp-linha depois"><span>Agora</span><i style="width:${tem ? (depois / max) * 100 : 0}%"></i><b>${estado ? "…" : num(depois)}</b></div>
+    </div>
+    <div class="cmp-fim"><small>${un}</small>${etiqueta}</div></li>`;
 }
 
 function ultimoResultado(tipo) {
@@ -98,18 +235,31 @@ function telaMemoria() {
     const c = m.chip, tm = L?.timings, pm = L?.pm || {};
     const mts = tm ? (pm.mclk ? Math.round(pm.mclk * 2) : tm.mts_ratio) : null;
     const xmpV = c?.pentes?.[0]?.xmp?.tensao;
-    const html = !L ? "<p class='vazio'>Lendo a memória…</p>" : L.erro ? `<p class="vazio">Não consegui ler: ${esc(L.erro)}</p>` : `
-      <p class="texto">Seus pentes: <b>${esc(S.init.hw.pentes)} × ${Math.round(S.init.hw.gb / Math.max(1, S.init.hw.pentes))} GB</b>${c ? `, com chips <b>${esc(c.nome)}</b>` : ""}.
-      Hoje estão a <b>${mts} MT/s</b>, com atraso de leitura <b>${tm.tCL}</b>.${m.alvos ? ` Pelo tipo de chip, devem chegar perto de <b>${m.alvos.freq} MT/s</b> com atrasos menores.` : ""}</p>
-      <p class="texto">Falta uma informação que o RyzenTune não consegue ler sozinho: a <b>tensão da memória</b>. Ela aparece na BIOS como "DRAM Voltage". Com o XMP ligado, quase sempre é 1,35 V.</p>
-      <label class="campo-tensao">Tensão da memória <input type="number" id="ass-vdram" step="0.005" min="1.10" max="1.45" value="${xmpV || 1.35}"> V</label>`;
-    return { chave: "m-inicio", topoEsq: "Começo", topoDir: "", fracao: 0,
-      titulo: "Vamos conhecer a sua memória",
-      html, primario: L && !L.erro ? ["Começar", async () => {
-        const v = parseFloat($("#ass-vdram").value);
-        if (!(v >= 1.1 && v <= 1.45)) { aviso("Digite a tensão entre 1,10 e 1,45 V.", "erro"); return; }
+    const ficha = fichaPc({ mts, tCL: tm?.tCL, carregando: !L });
+    if (L?.erro) {
+      return { chave: "m-inicio-erro", titulo: "Não consegui ler a memória",
+        texto: "Outro programa de monitoramento pode estar usando o mesmo acesso. Feche HWiNFO, ZenTimings ou Ryzen Master, se estiverem abertos, e leia de novo.",
+        html: `${ficha}<p class="nota">Detalhe para suporte: ${esc(L.erro)}</p>`,
+        primario: ["Ler a memória de novo", () => { S.leitura = null; desenharAssistente(); return lerTimings(); }] };
+    }
+    const semChip = !c || c.chip === "generico" || !m.alvos;
+    const previsao = !L ? "" : semChip
+      ? `<p class="previsao-ass neutra">Não deu para saber o tipo de chip pelos pentes. A busca funciona igual, só leva alguns ajustes a mais.</p>`
+      : `<p class="previsao-ass">Pelo tipo de chip, a sua memória deve chegar perto de <b>${m.alvos.freq} MT/s</b> com atrasos menores que os de hoje.</p>`;
+    const html = `${ficha}${previsao}
+      <div class="campo-tensao-ass${L ? "" : " desligado"}">
+        <label for="ass-vdram">Tensão da memória <span class="sigla">DRAM Voltage</span></label>
+        <span class="entrada"><input type="number" id="ass-vdram" step="0.005" min="1.10" max="1.45" value="${xmpV || 1.35}" ${L ? "" : "disabled"}> V</span>
+        <p>Veja na BIOS, perto da velocidade. Com XMP ligado, quase sempre é 1,35 V.</p>
+      </div>`;
+    return { chave: `m-inicio-${L ? "ok" : "lendo"}`,
+      titulo: "Confira o seu PC e comece",
+      texto: "O RyzenTune já leu as peças. Só falta a tensão da memória, que ele não consegue ler sozinho.",
+      html, primario: ["Começar", async () => {
+        const v = parseFloat(String($("#ass-vdram").value).replace(",", "."));
+        if (!(v >= 1.1 && v <= 1.45)) { aviso("A tensão precisa estar entre 1,10 e 1,45 V. Confira o valor de DRAM Voltage na BIOS.", "erro"); return; }
         if (await chamar("mem_usar_hardware", v)) await chamar("mem_preparar");
-      }] : null,
+      }], primarioDesligado: !L,
       detalhes: "O RyzenTune vai ajustar um item de cada vez. Em cada ajuste: você muda os valores na BIOS, ele confere se a BIOS aceitou e testa a memória. Se o teste achar erro, ele volta para o último valor bom e tenta um intermediário." };
   }
 
@@ -137,18 +287,26 @@ function telaMemoria() {
   if (t.situacao === "preparada") {
     const lista = valoresParaDigitar(t.perfil);
     const [onde, seFalhar] = S.init.bios;
-    return { chave: `m-prep-${t.passo}-${t.perfil[t.passo] ?? ""}`, ...topo(1, 3),
+    const chave = `m-prep-${t.passo}-${t.perfil[t.passo] ?? ""}`;
+    const avisoLeitura = !L ? `<p class="aviso-leitura">Lendo o que está rodando agora. Por enquanto, o número antes da seta é o último valor salvo.</p>`
+      : L.erro ? `<p class="aviso-leitura erro" title="${esc(L.erro)}">Não consegui ler a memória agora. O número antes da seta é o último valor salvo; os valores novos, em laranja, estão certos.</p>` : "";
+    if (!lista.length) {
+      return { chave: `${chave}-igual`, ...topo(1, 3), titulo: "A BIOS já está com esses valores",
+        html: `${ultimoResultado("Memória")}${avisoLeitura}<p class="texto">Nada para digitar desta vez. O próximo passo é conferir e testar <b>${esc(nome)}</b>.</p>`,
+        primario: ["Conferir e testar", conferirMem], links: [["Pular este ajuste", () => chamar("mem_pular")]] };
+    }
+    return { chave, ...topo(1, 3), larga: lista.length > 6,
       titulo: lista.length === 1 ? "Mude 1 valor na BIOS" : `Mude ${lista.length} valores na BIOS`,
       html: `${ultimoResultado("Memória")}
-        <p class="texto">Agora vamos melhorar <b>${esc(nome)}</b>.</p>
-        ${lista.length ? tabelaValores(lista) : "<p class='texto'>A BIOS já está com esses valores.</p>"}
-        <p class="dica">Tire uma foto desta tela com o celular. Na BIOS: ${esc(onde)}</p>`,
+        <p class="texto">Agora vamos melhorar <b>${esc(nome)}</b>. Tire uma foto desta tela com o celular antes de reiniciar.</p>
+        ${avisoLeitura}${listaBios(lista, t.passo)}
+        <p class="dica"><b>Onde fica na BIOS:</b> ${esc(onde)}</p>`,
       primario: ["Reiniciar na BIOS", async () => {
         if (await confirmar("Reiniciar na BIOS", "Salve o que estiver aberto. O PC reinicia direto na BIOS em 5 segundos.", "Reiniciar agora"))
           chamar("mem_reiniciar_bios");
       }],
       links: [["Já mudei e reiniciei", conferirMem], ["Pular este ajuste", () => chamar("mem_pular")]],
-      detalhes: `Todos os outros campos ficam como estão. ${esc(seFalhar)}` };
+      detalhes: `Todos os outros campos ficam como estão. ${seFalhar}` };
   }
   if (t.situacao === "aplicada") {
     return { chave: "m-aplicada", ...topo(2, 3), titulo: "Esperando você reiniciar",
@@ -164,32 +322,48 @@ function telaMemoria() {
       links: [["Testar assim mesmo", () => chamar("mem_aceitar_divergencia")]] };
   }
   // testar
-  const rodando = S.teste?.rodando && S.teste.tipo === "memoria";
-  return { chave: `m-testar-${rodando ? "rodando" : "parado"}`, ...topo(3, 3),
-    titulo: rodando ? "Testando a memória…" : "A BIOS aceitou. Agora o teste",
-    html: rodando ? `<p class="texto">Pode deixar o PC sozinho. Se aparecer qualquer erro, o RyzenTune volta ao último valor bom.</p><div id="ass-teste"></div>`
-      : `<p class="texto">O teste escreve e confere quase toda a memória livre por <b>30 minutos</b>, usando todos os núcleos. Feche jogos e programas pesados antes.</p>`,
-    primario: rodando ? null : ["Começar o teste", () => iniciarTesteMem(30, 85)],
-    links: rodando ? [] : [["O PC travou ou reiniciou sozinho", async () => {
+  const st = S.teste?.tipo === "memoria" ? S.teste : null;
+  const rodando = !!st?.rodando, terminou = !!st && !st.rodando && ["passou", "falhou"].includes(st.resultado);
+  if (rodando || terminou) {
+    const comErro = (st.erros || 0) > 0 || st.resultado === "falhou";
+    return { chave: "m-testar-rodando", ...topo(3, 3),
+      titulo: comErro ? "O teste encontrou erros" : terminou ? "Teste concluído" : "Testando a memória",
+      html: `<div id="ass-teste" class="ass-teste"></div>` };
+  }
+  return { chave: "m-testar-parado", ...topo(3, 3),
+    titulo: "A BIOS aceitou. Agora o teste",
+    html: `<p class="texto">O teste escreve e confere quase toda a memória livre por <b>30 minutos</b>, usando todos os núcleos. Feche jogos e programas pesados antes de começar.</p>
+      <ul class="resumo-teste"><li><b>30</b><span>minutos</span></li><li><b>85%</b><span>da memória livre</span></li><li><b>0</b><span>erros para passar</span></li></ul>`,
+    primario: ["Começar o teste", () => iniciarTesteMem(30, 85)],
+    links: [["O PC travou ou reiniciou sozinho", async () => {
       if (await confirmar("Travou?", "O ajuste será reprovado e o RyzenTune volta ao último valor bom.", "Sim, travou"))
         chamar("mem_resultado", false, "o PC travou (informado por você)");
     }]] };
 }
 
 function telaMemoriaPronta() {
-  const m = S.estado.mem, med = m.medicoes || [];
-  const p = m.estavel, ini = med[0];
-  const depoisLat = (p.tCL * 2000 / p.freq).toFixed(2);
-  return { chave: "m-pronta", topoEsq: "Concluído", topoDir: "", fracao: 1,
-    titulo: "Pronto: sua memória está no melhor ponto que aguentou",
-    html: `<div class="antes-depois">
-        <div><span>Antes</span><b>${ini ? `${ini.freq} CL${ini.tCL}` : "--"}</b><span>${ini ? `${ini.lat_cas_ns} ns, ${ini.gbps} GB/s` : ""}</span></div>
-        <span class="seta">→</span>
-        <div class="depois"><span>Agora</span><b>${p.freq} CL${p.tCL}</b><span>${depoisLat} ns${med.length ? `, ${med[med.length - 1].gbps} GB/s` : ""}</span></div>
-      </div>
-      <p class="texto">Os valores já estão salvos na BIOS. Não precisa fazer mais nada.</p>`,
-    links: [["Medir de novo", () => chamar("memoria_medir")], ["Recomeçar do zero", async () => {
-      if (await confirmar("Recomeçar", "A busca recomeça a partir dos valores atuais.", "Recomeçar")) chamar("mem_recomecar");
+  const m = S.estado.mem, med = m.medicoes || [], p = m.estavel, c = S.estado.cpu;
+  const ini = med[0], fim = med.length > 1 ? med[med.length - 1] : null;
+  const fimAtual = fim && fim.freq === p.freq && fim.tCL === p.tCL ? fim : null;  // medição antiga não vale como "agora"
+  const latAgora = Math.round((p.tCL * 2000 / p.freq) * 100) / 100;
+  const ganhou = ini && (p.freq > ini.freq || latAgora < ini.lat_cas_ns);
+  const html = `
+    ${!ini ? `<p class="aviso-leitura">Não há uma medição de antes da busca, então não dá para mostrar o ganho em números. Os números de "Agora" valem para os valores atuais.</p>` : ""}
+    ${erroMedir ? `<p class="aviso-leitura erro" title="${esc(erroMedir)}">Não consegui medir a banda agora. Feche jogos e programas pesados e clique em "Medir de novo".</p>` : ""}
+    <ol class="comparacao">
+      ${linhaComparacao("Velocidade", "DRAM Frequency", ini?.freq, p.freq, "MT/s", 0, false)}
+      ${linhaComparacao("Tempo de resposta", "latência do tCL", ini?.lat_cas_ns, latAgora, "ns", 2, true)}
+      ${linhaComparacao("Banda", "leitura e escrita", ini?.gbps, fimAtual?.gbps, "GB/s", 1, false, medindo ? "medindo…" : "")}
+    </ol>
+    <p class="texto">Os valores já estão salvos na BIOS e valem toda vez que o PC liga. Não precisa fazer mais nada na memória.</p>`;
+  const proxCpu = c.perfil?.suporta_co && !c.feito && !c.teste;
+  return { chave: "m-pronta", topoEsq: "Concluído", topoDir: `${new Set(m.feitos).size} ajustes`, fracao: 1,
+    titulo: ganhou ? "Pronto: sua memória ficou mais rápida" : "Pronto: sua memória está no melhor ponto que aguentou",
+    html,
+    primario: proxCpu ? ["Ajustar o processador agora", () => trocarTrilha("processador")]
+      : !fimAtual && !medindo ? ["Medir a banda agora", medirDeNovo] : null,
+    links: [...(proxCpu || fimAtual ? [[medindo ? "Medindo…" : "Medir de novo", () => { if (!medindo) medirDeNovo(); }]] : []), ["Recomeçar do zero", async () => {
+      if (await confirmar("Recomeçar do zero", "A busca recomeça a partir dos valores atuais. Os limites encontrados são esquecidos.", "Recomeçar")) chamar("mem_recomecar");
     }]] };
 }
 
@@ -268,7 +442,7 @@ function jornadaMemoria() {
   const itens = ORDEM.map((x) => {
     const busca = m.busca?.[x];
     let cls = "", icone = "", valor = "";
-    if (feitos.has(x)) {
+    if (!m.confirmado) { /* ainda não começou: todos neutros */ } else if (feitos.has(x)) {
       const melhorou = busca && busca.lo >= 0;
       cls = melhorou ? "feito" : "falhou";
       icone = melhorou ? "✓" : "–";
@@ -320,14 +494,18 @@ function desenharAssistente() {
       ${tela.texto ? `<p class="texto">${esc(tela.texto)}</p>` : ""}
       ${tela.html || ""}
       <div class="acoes-tela">
-        ${tela.primario ? `<button class="botao primario grande" data-acao="p">${esc(tela.primario[0])}</button>` : ""}
+        ${tela.primario ? `<button class="botao primario grande" data-acao="p"${tela.primarioDesligado ? " disabled" : ""}>${esc(tela.primario[0])}</button>` : ""}
         ${(tela.links || []).map(([r], i) => `<button class="link" data-acao="${i}">${esc(r)}</button>`).join("")}
       </div>
       ${tela.detalhes ? `<details class="detalhes"><summary>Como funciona</summary><p>${esc(tela.detalhes)}</p></details>` : ""}
     </div>`;
   if (tela.primario) $('[data-acao="p"]', alvo).onclick = (e) => { e.target.disabled = true; Promise.resolve(tela.primario[1]()).finally(() => { e.target.disabled = false; }); };
   (tela.links || []).forEach(([, fn], i) => { $(`[data-acao="${i}"]`, alvo).onclick = fn; });
-  if (S.teste?.rodando) desenharTeste($("#ass-teste"), S.teste);
+  $(".assistente-grade").classList.toggle("larga", !!tela.larga);
+  if (S.teste && $("#ass-teste")) {
+    if (S.teste.tipo === "memoria") desenharTesteAssistente($("#ass-teste"), S.teste);
+    else if (S.teste.rodando) desenharTeste($("#ass-teste"), S.teste);
+  }
 }
 
 function ligarAssistente() {

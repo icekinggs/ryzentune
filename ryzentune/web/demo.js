@@ -33,14 +33,32 @@ export function criarDemo() {
   if (new URLSearchParams(location.search).has("semanim")) estado.config.animacoes = false;
   if (cenario === "inicio") { m.confirmado = false; m.teste = null; }
   if (cenario === "testar") m.teste.situacao = "testar";
-  if (cenario === "pronta") { m.teste = null; m.feitos = ["freq", "tCL", "tRCDRD", "tRCDWR", "tRP", "tRAS", "tRFC", "grupoRRD", "grupoWTR", "tWR"]; }
+  if (cenario === "pronta") { m.teste = null; m.feitos = ["freq", "tCL", "tRCDRD", "tRCDWR", "tRP", "tRAS", "tRFC", "grupoRRD", "grupoWTR", "tWR"];
+    m.busca = Object.fromEntries(m.feitos.map((k) => [k, { lo: k === "tRAS" ? -1 : 1 }])); }
   if (cenario === "obs") {
     m.teste = null; m.feitos = ["freq"];
     estado.cpu.teste = { valor: -20, situacao: "observando", desde: "2026-11-12T08:00:00", desde_obs: new Date(Date.now() - 9 * 36e5).toISOString() };
   }
   estado.historico.push({ quando: "2026-11-12T20:40:00", tipo: "Memória", texto: "PASSOU 'tCL (latência CAS)'. Novo estável: 3600 MT/s CL16-19-19-36." });
+  // estados extras de cada tela: &estado=carregando | erro | vazio, e &rodando para o teste já em andamento
+  const q = new URLSearchParams(location.search), est2 = q.get("estado") || "";
+  if (cenario === "preparada" && q.has("muitos")) {  // passo da velocidade com XMP 3200 CL18: muda quase tudo (caso real)
+    Object.assign(m.estavel, { freq: 3200, fclk: 1600, tCL: 18, tRCDRD: 22, tRCDWR: 22, tRP: 22, tRAS: 42, tRC: 74, tRFC: 560, tRRDS: 6, tRRDL: 8, tFAW: 34, tWTRS: 4, tWTRL: 12, tWR: 24, tRTP: 12, tCWL: 16 });
+    m.feitos = []; m.medicoes = [];
+    m.teste = { passo: "freq", situacao: "preparada", perfil: { ...m.estavel, freq: 3600, fclk: 1800, tCL: 22, tRCDRD: 25, tRCDWR: 25, tRP: 25, tRAS: 48, tRC: 73, tRFC: 630, tRRDS: 7, tRRDL: 9, tFAW: 38, tWTRS: 5, tWTRL: 14, tWR: 27, tRTP: 14, tCWL: 20 } };
+  }
+  if (est2 === "vazio") {
+    if (cenario === "inicio") { m.chip = null; m.alvos = null; }
+    if (cenario === "preparada") m.teste.perfil = { ...m.estavel };
+    if (cenario === "pronta") m.medicoes = [];
+  }
+  if (cenario === "pronta" && est2 === "erro") m.medicoes = m.medicoes.slice(0, 1);
   let t = 52;
   let teste = { rodando: false };
+  if (cenario === "testar" && q.has("rodando")) {
+    teste = est2 === "carregando" ? { rodando: true, tipo: "memoria", minutos: 30, fracao: 0, erros: 0, gbps: 0, ciclo: 0, mb: 24000, padrao: "" }
+      : { rodando: true, tipo: "memoria", minutos: 30, fracao: 0.42, erros: est2 === "erro" ? 12 : 0, gbps: 38.4, ciclo: 3, mb: 24000, padrao: "aleatório" };
+  }
   const ok = (x = {}) => Promise.resolve({ ok: true, estado, ...x });
   return new Proxy({
     iniciar: () => new Promise((r) => setTimeout(() => r({
@@ -52,15 +70,20 @@ export function criarDemo() {
         "Se não ligar, a placa tenta 3 vezes e volta sozinha ao padrão. Senão, limpe o CMOS."],
       versao: "2.0.0", repo: "icekinggs/ryzentune", estado }), 300)),
     ao_vivo: () => { t += (Math.random() - 0.45) * 3; return Promise.resolve({ disponivel: true, temp: t, fclk: 1800, uclk: 1800, mclk: 1800, vsoc: 1.0938 }); },
-    ler_timings: () => Promise.resolve({ timings: { ...est, mts_ratio: 3600, cmd2t: 0, tRDRDSCL: 4, tWRWRSCL: 4, tREFI: 14029, tRFC2: 428, tRFC4: 263 },
+    ler_timings: () => q.has("muitos") && !est2 ? Promise.resolve({ timings: { ...est, mts_ratio: est.freq }, pm: { fclk: 1708, uclk: 1708, mclk: 1708, vsoc: 1.0 } })  // tabela de energia deslocada, como no print real
+      : est2 === "carregando" ? new Promise(() => {})
+      : est2 === "erro" && cenario !== "pronta" ? Promise.resolve({ erro: "acesso ao controlador de memória negado (0xC0000022)" })
+      : Promise.resolve({ timings: { ...est, mts_ratio: 3600, cmd2t: 0, tRDRDSCL: 4, tWRWRSCL: 4, tREFI: 14029, tRFC2: 428, tRFC4: 263 },
       pm: { fclk: 1800, uclk: 1800, mclk: 1800, vsoc: 1.0938 }, co: [-15, -15, -15, -15, -15, -15, -15, -15] }),
     obter_estado: () => Promise.resolve(estado),
     memoria_opcoes_chip: () => Promise.resolve({ opcoes: [["samsung_b", "Samsung B-die"], ["hynix_8", "SK Hynix 8 Gb (CJR ou DJR)"], ["micron_8", "Micron 8 Gb (provável Rev.E)"], ["generico", "Chip não identificado"]] }),
+    memoria_medir: () => est2 === "erro" ? new Promise((r) => setTimeout(() => r({ erro: "o teste de banda foi interrompido pelo Windows" }), 600))
+      : est2 === "carregando" ? new Promise(() => {}) : ok({ resultado: { gbps: 41.2 } }),
     teste_status: () => {
-      if (teste.rodando) { teste.fracao = Math.min(1, teste.fracao + 0.02); if (teste.tipo === "nucleos") { const k = Object.keys(teste.nucleos); const i = Math.floor(teste.fracao * k.length); k.forEach((c, j) => { teste.nucleos[c] = j < i ? "ok" : j === i ? "testando" : "fila"; }); } if (teste.fracao >= 1) { teste.rodando = false; teste.resultado = "passou"; } }
+      if (teste.rodando && !(est2 === "carregando")) { teste.fracao = Math.min(1, teste.fracao + (q.has("rodando") ? 0.002 : 0.02)); if (teste.tipo === "nucleos") { const k = Object.keys(teste.nucleos); const i = Math.floor(teste.fracao * k.length); k.forEach((c, j) => { teste.nucleos[c] = j < i ? "ok" : j === i ? "testando" : "fila"; }); } if (teste.fracao >= 1) { teste.rodando = false; teste.resultado = "passou"; } }
       return Promise.resolve(teste);
     },
-    teste_memoria: () => { teste = { rodando: true, tipo: "memoria", fracao: 0, erros: 0, gbps: 38.4, ciclo: 1, mb: 24000, padrao: "aleatório" }; return ok({ mb: 24000 }); },
+    teste_memoria: () => { teste = { rodando: true, tipo: "memoria", minutos: 30, fracao: 0, erros: 0, gbps: 38.4, ciclo: 1, mb: 24000, padrao: "aleatório" }; return ok({ mb: 24000 }); },
     teste_nucleos: () => { teste = { rodando: true, tipo: "nucleos", fracao: 0, erros: 0, nucleos: Object.fromEntries([0, 2, 4, 6, 8, 10, 12, 14].map((c) => [c, "fila"])) }; return ok({ nucleos: [0, 2, 4, 6, 8, 10, 12, 14] }); },
     atualizacao_verificar: () => Promise.resolve({ nova: null, atual: "2.0.0", configurado: true }),
   }, { get: (alvo, nome) => alvo[nome] || (() => ok()) });
