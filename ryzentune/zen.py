@@ -272,3 +272,32 @@ class Zen:
         except Exception:
             return None
         return valores or None
+
+
+# ---------------------------------------------------------------- SPD pelo SMBus (FCH AMD)
+class SMBus:
+    """Barramento SMBus do chipset (módulo SmbusPIIX4). Usa a porta 0, onde ficam os pentes."""
+
+    TRAVA = "Global\\Access_SMBUS.HTP.Method"
+
+    def __init__(self):
+        from . import pawnio
+        self.pawnio = pawnio
+        self.mod = pawnio.Modulo("SmbusPIIX4.bin")
+
+    def fechar(self):
+        self.mod.fechar()
+
+    def _xfer(self, addr, rw, cmd, proto, dados):
+        entrada = [addr, rw, cmd, proto] + list(dados)
+        return self.mod.executar("ioctl_smbus_xfer", entrada, 1 if rw else 0) or [0]
+
+    def ler_spds(self) -> dict[int, bytes]:
+        from .spd import LeitorSPD
+        with self.pawnio.TravaPCI(self.TRAVA, 5000):
+            anterior = self.mod.executar("ioctl_piix4_port_sel", [0], 1)[0]
+            try:
+                return LeitorSPD(self._xfer).ler_todos()
+            finally:
+                if anterior not in (0, 0xFFFFFFFFFFFFFFFF):
+                    self.mod.executar("ioctl_piix4_port_sel", [anterior], 1)

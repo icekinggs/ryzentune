@@ -94,70 +94,126 @@ def recalcular(p: dict, tem_fclk: bool) -> dict:
     return p
 
 
-def candidato(passo: str, p: dict, mem: dict, cpu: dict) -> dict | None:
-    """Próxima alteração mais agressiva do ajuste 'passo', ou None se acabou."""
+# ---------------------------------------------------------------- busca inteligente
+# Cada ajuste vira uma lista de valores, do menos para o mais agressivo. A busca começa no alvo
+# previsto para o chip (conhecimento.py) e depois divide o intervalo ao meio entre o último que passou
+# e o primeiro que falhou. Sem previsão, anda um passo de cada vez.
+PISO = {"tCL": 12, "tRCDRD": 12, "tRCDWR": 8, "tRP": 12, "trfc_ns": 200}
+GRUPO_RRD = [{"tRRDS": 5, "tRRDL": 7, "tFAW": 24}, {"tRRDS": 4, "tRRDL": 6, "tFAW": 16}]
+
+
+def lista_valores(passo: str, p: dict, cpu: dict, alvos: dict | None) -> list:
+    a = alvos or {}
+
+    def descendo(atual, alvo, piso, passo_=1, piso_generico=14):
+        fim = max(piso, (alvo - 2) if alvo else piso_generico)
+        return list(range(atual - passo_, fim - 1, -passo_))
     if passo == "freq":
-        maiores = [f for f in cpu["freqs"] if f > p["freq"]]
-        if not maiores:
-            return None
-        f = maiores[0]
-        mud = {"freq": f, "tRFC": math.ceil(ns_trfc(p) * f / 2000)}
+        return [f for f in cpu["freqs"] if f > p["freq"]]
+    if passo == "tCL":
+        return descendo(p["tCL"], a.get("tCL"), PISO["tCL"], 2 if p["gdm"] else 1)
+    if passo == "tRCDRD":
+        return descendo(p["tRCDRD"], a.get("tRCDRD"), PISO["tRCDRD"])
+    if passo == "tRCDWR":
+        return list(range(p["tRCDWR"] - 2, PISO["tRCDWR"] - 1, -2))
+    if passo == "tRP":
+        return descendo(p["tRP"], a.get("tRP"), PISO["tRP"])
+    if passo == "tRAS":
+        minimo = max(28, p["tCL"] + p["tRCDRD"])
+        vals = list(range(p["tRAS"] - 2, minimo, -2))
+        return vals + [minimo] if p["tRAS"] > minimo else []
+    if passo == "tRFC":
+        atual = ns_trfc(p)
+        piso = max(PISO["trfc_ns"], a["trfc_ns"] - 40) if a.get("trfc_ns") else 240
+        return [ns for ns in range(int(atual // 10) * 10, piso - 1, -10)
+                if ns < atual - 1 and math.ceil(ns * p["freq"] / 2000) < p["tRFC"]]
+    if passo == "grupoRRD":
+        return [i for i, s in enumerate(GRUPO_RRD) if any(min(v, p[k]) < p[k] for k, v in s.items())]
+    if passo == "grupoWTR":
+        return [0] if p["tWTRS"] > 4 or p["tWTRL"] > 10 else []
+    if passo == "tWR":
+        return [v for v in (20, 16, 14, 12, 10) if v < p["tWR"]]
+    raise ValueError(passo)
+
+
+def indice_alvo(passo: str, lista: list, alvos: dict | None) -> int:
+    """Índice do valor previsto (o mais agressivo que não passa do alvo). 0 sem previsão."""
+    if not alvos or not lista:
+        return 0
+    chave = {"freq": "freq", "tCL": "tCL", "tRCDRD": "tRCDRD", "tRCDWR": "tRCDWR", "tRP": "tRP",
+             "tRAS": "tRAS", "tRFC": "trfc_ns"}.get(passo)
+    if chave is None or chave not in alvos:
+        return len(lista) - 1 if passo in ("grupoRRD", "grupoWTR") else 0
+    alvo = alvos[chave]
+    mais_agressivo = (lambda v: v > alvo) if passo == "freq" else (lambda v: v < alvo)
+    ok = [i for i, v in enumerate(lista) if not mais_agressivo(v)]
+    return ok[-1] if ok else 0
+
+
+def mudanca(passo: str, valor, p: dict, mem: dict, cpu: dict) -> dict:
+    if passo == "freq":
+        # mantém os tempos em nanossegundos: mesmos ciclos numa frequência maior seriam mais apertados
+        escala = valor / p["freq"]
+        mud = {"freq": valor, "tRFC": math.ceil(ns_trfc(p) * valor / 2000)}
+        for k in ("tCL", "tRCDRD", "tRCDWR", "tRP", "tRAS", "tCWL", "tWR", "tRTP", "tRRDS", "tRRDL", "tFAW",
+                  "tWTRS", "tWTRL"):
+            mud[k] = math.ceil(p[k] * escala - 0.05)
+        if p["gdm"]:  # com GearDown o tCL/tCWL efetivo é par
+            mud["tCL"] += mud["tCL"] % 2
+            mud["tCWL"] += mud["tCWL"] % 2
         if mem.get("mais_tensao") and p["vdram"] < VDRAM_SEGURA:
             mud["vdram"] = VDRAM_SEGURA
-        if f >= 3733 and cpu["tem_fclk"] and p["vsoc"] < 1.125:
+        if valor >= 3733 and cpu["tem_fclk"] and p["vsoc"] < 1.125:
             mud["vsoc"] = 1.125
         return mud
     if passo == "tCL":
-        v = p["tCL"] - (2 if p["gdm"] else 1)
-        return {"tCL": v, "tCWL": min(p["tCWL"], v)} if v >= 14 else None
-    if passo == "tRCDRD":
-        v = p["tRCDRD"] - 1
-        return {"tRCDRD": v} if v >= 14 else None
-    if passo == "tRCDWR":
-        v = p["tRCDWR"] - 2
-        return {"tRCDWR": v} if v >= 8 else None
-    if passo == "tRP":
-        v = p["tRP"] - 1
-        return {"tRP": v} if v >= 14 else None
+        return {"tCL": valor, "tCWL": min(p["tCWL"], valor)}
     if passo == "tRAS":
-        minimo = max(28, p["tCL"] + p["tRCDRD"])
-        return {"tRAS": max(p["tRAS"] - 2, minimo)} if p["tRAS"] > minimo else None
+        return {"tRAS": max(valor, max(28, p["tCL"] + p["tRCDRD"]))}
     if passo == "tRFC":
-        atual = ns_trfc(p)
-        for ns in TRFC_NS:
-            clk = math.ceil(ns * p["freq"] / 2000)
-            if clk < p["tRFC"] and ns < atual - 1:
-                return {"tRFC": clk}
-        return None
+        return {"tRFC": math.ceil(valor * p["freq"] / 2000)}
     if passo == "grupoRRD":
-        for s in ({"tRRDS": 5, "tRRDL": 7, "tFAW": 24}, {"tRRDS": 4, "tRRDL": 6, "tFAW": 16}):
-            novo = {k: min(v, p[k]) for k, v in s.items()}
-            if any(novo[k] < p[k] for k in novo):
-                return novo
-        return None
+        return {k: min(v, p[k]) for k, v in GRUPO_RRD[valor].items()}
     if passo == "grupoWTR":
-        novo = {"tWTRS": min(4, p["tWTRS"]), "tWTRL": min(10, p["tWTRL"])}
-        return novo if any(novo[k] < p[k] for k in novo) else None
+        return {"tWTRS": min(4, p["tWTRS"]), "tWTRL": min(10, p["tWTRL"])}
     if passo == "tWR":
-        for v in (20, 16, 14, 12, 10):
-            if v < p["tWR"]:
-                return {"tWR": v, "tRTP": min(p["tRTP"], max(5, v // 2))}
+        return {"tWR": valor, "tRTP": min(p["tRTP"], max(5, valor // 2))}
+    return {passo: valor}
+
+
+def _proximo_indice(b: dict):
+    if b.get("repetir") is not None:
+        return b["repetir"]
+    lo, hi = b["lo"], b["hi"]
+    if hi - lo <= 1:
         return None
-    raise ValueError(passo)
+    if not b["tentativas"]:
+        return min(max(b["alvo"], lo + 1), hi - 1)
+    if hi == len(b["lista"]):
+        return lo + 1               # ainda não falhou: avança com cuidado
+    return (lo + hi) // 2           # já falhou: divide o intervalo
 
 
 def proxima_etapa_mem(e: dict):
     """Retorna (passo, perfil_novo) ou (None, None) quando a busca terminou."""
     m, cpu = e["mem"], e["cpu"]["perfil"]
     p = m["estavel"]
+    busca = m.setdefault("busca", {})
     for passo in ORDEM_MEM:
         if passo in m["feitos"]:
             continue
-        mud = candidato(passo, p, m, cpu)
-        if mud is None:
+        b = busca.get(passo)
+        if b is None:
+            lista = lista_valores(passo, p, cpu, m.get("alvos"))
+            b = busca[passo] = {"lista": lista, "lo": -1, "hi": len(lista), "tentativas": 0,
+                                "alvo": indice_alvo(passo, lista, m.get("alvos")), "repetir": None, "indice": None}
+        i = _proximo_indice(b)
+        if i is None:
             m["feitos"].append(passo)
             continue
-        return passo, recalcular(dict(p, **mud), cpu["tem_fclk"])
+        b["indice"] = i
+        valor = b["lista"][i]
+        return passo, recalcular(dict(p, **mudanca(passo, valor, p, m, cpu)), cpu["tem_fclk"])
     return None, None
 
 
@@ -174,9 +230,21 @@ def marcar_aplicada_mem(e: dict):
     t["desde"] = agora_iso()
 
 
+def _registrar_tentativa(m: dict, passo: str, passou: bool):
+    b = m.get("busca", {}).get(passo)
+    if not b or b.get("indice") is None:
+        return
+    b["tentativas"] += 1
+    m["reinicios"] = m.get("reinicios", 0) + 1
+    if passou:
+        b["lo"] = b["indice"]
+    b["repetir"] = None
+
+
 def passar_mem(e: dict) -> str:
     m = e["mem"]
     t = m["teste"]
+    _registrar_tentativa(m, t["passo"], True)
     m["estavel"] = t["perfil"]
     if t["passo"] == "freq":
         m["mais_tensao"] = False
@@ -191,11 +259,20 @@ def falhar_mem(e: dict, motivo: str) -> str:
     t = m["teste"]
     passo = t["passo"]
     m["teste"] = None
+    _registrar_tentativa(m, passo, False)
+    b = m.get("busca", {}).get(passo)
     if passo == "freq" and not m["mais_tensao"] and t["perfil"]["vdram"] < VDRAM_SEGURA:
         m["mais_tensao"] = True
+        if b:
+            b["repetir"] = b["indice"]
         return f"FALHOU {t['perfil']['freq']} MT/s: {motivo}. Próxima tentativa com {VDRAM_SEGURA} V."
-    m["feitos"].append(passo)
+    if b:
+        b["hi"] = b["indice"]
     m["mais_tensao"] = False
+    if b and _proximo_indice(b) is not None:
+        return (f"FALHOU '{DESCR_ETAPA[passo]}': {motivo}. Volta ao estável; "
+                "a próxima tentativa fica no meio do caminho.")
+    m["feitos"].append(passo)
     return f"FALHOU '{DESCR_ETAPA[passo]}': {motivo}. Limite encontrado; fica o último estável."
 
 
@@ -206,6 +283,19 @@ def pular_mem(e: dict) -> str:
     e["mem"]["mais_tensao"] = False
     return f"Ajuste '{DESCR_ETAPA[t['passo']]}' pulado."
 
+
+def economia(m: dict) -> dict:
+    """Reinícios usados x reinícios que a busca de um em um teria usado até o mesmo resultado."""
+    usados = linear = 0
+    for b in m.get("busca", {}).values():
+        usados += b["tentativas"]
+        if b["tentativas"]:
+            linear += (b["lo"] + 1) + (1 if b["hi"] < len(b["lista"]) else 0)
+    return {"usados": usados, "linear": linear}
+
+
+def reiniciar_busca(m: dict) -> None:
+    m.update(feitos=[], mais_tensao=False, teste=None, busca={})
 
 # ---------------------------------------------------------------- processador
 def proximo_co(e: dict):

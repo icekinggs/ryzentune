@@ -243,6 +243,29 @@ input[type=number] { width: 96px; font-family: var(--fonte-instr); font-variant-
 .caminho-bios { padding: 10px 14px; border-left: 3px solid var(--acao); background: #1B1A14; color: #EBDDBF;
   border-radius: 0 var(--raio-1) var(--raio-1) 0; max-width: 80ch; }
 
+/* ================= inteligência ================= */
+.chip-topo { display: flex; gap: 24px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+.chip-nome { margin: 0; font: 600 26px/1.2 var(--fonte-instr); font-stretch: 90%; }
+.chip-nome .etiqueta { margin-left: 10px; vertical-align: 5px; }
+.chip-troca { margin: 0; font-size: 13px; }
+.pentes { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
+.pente { padding: 8px 12px; border: 1px dashed var(--traco); border-radius: var(--raio-1); font-size: 13px; color: var(--texto-2); }
+.pente b { color: var(--texto); font-weight: 600; }
+.previsao { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-top: 14px; }
+.prev { padding: 10px 12px; background: var(--placa); border: 1px solid var(--traco); border-radius: var(--raio-1); }
+.prev span { display: block; color: var(--texto-3); font-size: 12.5px; }
+.prev b { font: 600 20px var(--fonte-instr); font-variant-numeric: tabular-nums; }
+.prev i { font-style: normal; color: var(--texto-3); margin: 0 6px; }
+.prev b.alvo { color: var(--sinal); }
+.prev.chegou { border-color: #245A3B; }
+.prev.chegou b.alvo { color: var(--ok); }
+.tabela-medicoes { width: 100%; border-collapse: collapse; margin-top: 8px; font-variant-numeric: tabular-nums; }
+.tabela-medicoes th { text-align: left; color: var(--texto-3); font-weight: 500; font-size: 13px; padding: 6px 10px;
+  border-bottom: 1px solid var(--traco); }
+.tabela-medicoes td { padding: 8px 10px; border-bottom: 1px solid #1E2C3C; }
+.tabela-medicoes tr.melhor td { color: var(--ok); }
+.tabela-medicoes td.num { font: 600 16px var(--fonte-instr); }
+
 /* ================= testes ================= */
 .progresso-teste { display: grid; grid-template-columns: 150px 1fr; gap: 24px; align-items: center; }
 .anel { width: 150px; height: 150px; }

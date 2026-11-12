@@ -17,6 +17,12 @@ Tudo dentro do app, com interface nova.
 - Curve Optimizer aplicado direto no processador e lido de volta núcleo por núcleo. Não precisa mais do
   PBO2 Tuner.
 - O instalador inclui o driver PawnIO (assinado), usado para acessar o hardware.
+- Busca inteligente da memória: lê o SPD dos pentes, identifica o chip (Samsung B-die, Hynix, Micron, Nanya,
+  CXMT…), prevê até onde ele costuma chegar e começa cada ajuste nesse valor. Depois divide o intervalo ao meio
+  em vez de descer de um em um, chegando ao mesmo resultado com menos reinícios.
+- Ao subir a frequência, os timings são afrouxados para manter o tempo em nanossegundos. Antes, os mesmos ciclos
+  numa frequência maior ficavam mais apertados e reprovavam frequências que o pente aguentava.
+- Mede a banda de cada perfil estável e mostra a latência real em nanossegundos.
 
 ## [1.0.0] - 2026-11-12
 

@@ -45,7 +45,7 @@ New-Item -ItemType Directory -Force $modulos | Out-Null
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $zip = [IO.Compression.ZipFile]::OpenRead("$terceiros\modulos.zip")
 try {
-    foreach ($n in 'AMDFamily17.bin', 'RyzenSMU.bin', 'COPYING') {
+    foreach ($n in 'AMDFamily17.bin', 'RyzenSMU.bin', 'SmbusPIIX4.bin', 'COPYING') {
         $ent = $zip.Entries | Where-Object { $_.FullName -eq $n }
         if (-not $ent) { throw "Módulo $n não está no pacote" }
         [IO.Compression.ZipFileExtensions]::ExtractToFile($ent, "$modulos\$n", $true)

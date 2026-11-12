@@ -6,6 +6,16 @@ export function criarDemo() {
   };
   const estado = {
     mem: { estavel: est, confirmado: true, feitos: ["freq", "tCL"], mais_tensao: false,
+      chip: { chip: "hynix_8", nome: "SK Hynix 8 Gb (CJR ou DJR)", confianca: "média",
+        motivo: "Chips SK Hynix de 8 Gb. O SPD não diferencia o CJR do DJR.",
+        pentes: [0, 2].map((slot) => ({ slot, modelo: "HKED4161CAB2F2HB4", tamanho_gb: 16, ranks: 2, fabricante_dram: "SK Hynix",
+          densidade_gbit: 8, largura: 8, xmp: { mts: 3200, cl: 16 } })) },
+      alvos: { freq: 3600, tCL: 16, tRCDRD: 19, tRP: 19, trfc_ns: 320, nota: "O DJR costuma ir além do previsto; o CJR fica perto." },
+      economia: { usados: 6, linear: 11 },
+      medicoes: [
+        { quando: "2026-11-12T19:12:00", freq: 3200, tCL: 16, tRCDRD: 18, gbps: 37.5, lat_cas_ns: 10, trfc_ns: 350 },
+        { quando: "2026-11-12T19:45:00", freq: 3600, tCL: 16, tRCDRD: 19, gbps: 41.2, lat_cas_ns: 8.89, trfc_ns: 320 },
+      ],
       teste: { passo: "tRCDRD", perfil: { ...est, tRCDRD: 18 }, situacao: "preparada", desde: "2026-11-12T20:00:00" } },
     cpu: { estavel: -15, teste: null, feito: false, perfil: { nome: "AMD Ryzen 7 5700X3D 8-Core Processor", geracao: "zen3",
       nucleos: 8, x3d: true, suporta_co: true, tem_fclk: true, am4: true } },
@@ -32,6 +42,7 @@ export function criarDemo() {
     ler_timings: () => Promise.resolve({ timings: { ...est, mts_ratio: 3600, cmd2t: 0, tRDRDSCL: 4, tWRWRSCL: 4, tREFI: 14029, tRFC2: 428, tRFC4: 263 },
       pm: { fclk: 1800, uclk: 1800, mclk: 1800, vsoc: 1.0938 }, co: [-15, -15, -15, -15, -15, -15, -15, -15] }),
     obter_estado: () => Promise.resolve(estado),
+    memoria_opcoes_chip: () => Promise.resolve({ opcoes: [["samsung_b", "Samsung B-die"], ["hynix_8", "SK Hynix 8 Gb (CJR ou DJR)"], ["micron_8", "Micron 8 Gb (provável Rev.E)"], ["generico", "Chip não identificado"]] }),
     teste_status: () => {
       if (teste.rodando) { teste.fracao = Math.min(1, teste.fracao + 0.02); if (teste.tipo === "nucleos") { const k = Object.keys(teste.nucleos); const i = Math.floor(teste.fracao * k.length); k.forEach((c, j) => { teste.nucleos[c] = j < i ? "ok" : j === i ? "testando" : "fila"; }); } if (teste.fracao >= 1) { teste.rodando = false; teste.resultado = "passou"; } }
       return Promise.resolve(teste);

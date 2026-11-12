@@ -10,7 +10,7 @@ import os
 import threading
 import traceback
 
-from . import atualizador, estado, hardware, motor, sistema, testes
+from . import atualizador, conhecimento, estado, hardware, motor, sistema, testes
 from .versao import NOME, REPO, __version__
 
 log = sistema.log
@@ -147,6 +147,7 @@ class Api:
     def _estado(self):
         e = estado.carregar()
         e["historico"] = e["historico"][-200:]
+        e["mem"]["economia"] = motor.economia(e["mem"])
         return e
 
     @_seguro
@@ -182,7 +183,8 @@ class Api:
             return {"erro": "Valores lidos fora do esperado: " + "; ".join(erros)}
 
         def f(e):
-            e["mem"].update(estavel=p, confirmado=True, feitos=[], mais_tensao=False, teste=None)
+            e["mem"].update(estavel=p, confirmado=True)
+            motor.reiniciar_busca(e["mem"])
             self._reg(e, "Memória", f"Ponto de partida lido do hardware: {p['freq']} MT/s CL{p['tCL']}-"
                                     f"{p['tRCDRD']}-{p['tRP']}-{p['tRAS']} tRFC {p['tRFC']} "
                                     f"({motor.ns_trfc(p):.0f} ns), {vdram} V.")
@@ -199,7 +201,8 @@ class Api:
             return {"erro": "; ".join(erros)}
 
         def f(e):
-            e["mem"].update(estavel=p, confirmado=True, feitos=[], mais_tensao=False, teste=None)
+            e["mem"].update(estavel=p, confirmado=True)
+            motor.reiniciar_busca(e["mem"])
             self._reg(e, "Memória", f"Ponto de partida salvo: {p['freq']} MT/s CL{p['tCL']}.")
         return self._acao(f)
 
@@ -291,8 +294,89 @@ class Api:
     @_seguro
     def mem_recomecar(self):
         def f(e):
-            e["mem"].update(feitos=[], mais_tensao=False, teste=None)
+            motor.reiniciar_busca(e["mem"])
             self._reg(e, "Memória", "Busca recomeçada a partir do estável.")
+        return self._acao(f)
+
+    # ------------------------------------------------------------ inteligência da memória
+    def _ler_spds(self) -> list[dict]:
+        from . import spd
+        from .zen import SMBus
+        bus = SMBus()
+        try:
+            brutos = bus.ler_spds()
+        finally:
+            bus.fechar()
+        r = []
+        for slot, dados in sorted(brutos.items()):
+            try:
+                d = spd.decodificar(dados)
+                d["slot"] = slot
+                r.append(d)
+            except ValueError:
+                continue
+        return r
+
+    def _aplicar_chip(self, e, chip: dict, pentes: list[dict]):
+        perfil_cpu = e["cpu"]["perfil"] or {}
+        ranks = sum(p.get("ranks", 1) for p in pentes) or 2
+        qtd = len(pentes) or int((self._hw or {}).get("pentes") or 2)
+        e["mem"]["chip"] = dict(chip, pentes=pentes)
+        e["mem"]["alvos"] = conhecimento.alvos(chip["chip"], perfil_cpu, ranks, qtd)
+
+    @_seguro
+    def memoria_identificar(self):
+        """Lê o SPD dos pentes, identifica o chip e calcula os alvos."""
+        pentes, erro = [], None
+        try:
+            pentes = self._ler_spds()
+        except Exception as ex:
+            erro = str(ex)
+            log.warning("não consegui ler o SPD: %s", ex)
+        chip = conhecimento.identificar(pentes)
+        if erro:
+            chip["motivo"] += f" ({erro})"
+        resumo = [{k: p.get(k) for k in ("slot", "fabricante_dram", "fabricante_modulo", "densidade_gbit",
+                                         "largura", "ranks", "tamanho_gb", "modelo", "xmp", "jedec_mts",
+                                         "jedec_cl")} for p in pentes]
+
+        def f(e):
+            if (e["mem"].get("chip") or {}).get("manual"):
+                return  # o usuário escolheu à mão: não sobrescreve
+            self._aplicar_chip(e, chip, resumo)
+            self._reg(e, "Memória", f"Chip identificado: {chip['nome']} (confiança {chip['confianca']}).")
+        return self._acao(f)
+
+    @_seguro
+    def memoria_escolher_chip(self, chave):
+        if chave not in conhecimento.CHIPS:
+            return {"erro": "chip desconhecido"}
+
+        def f(e):
+            pentes = (e["mem"].get("chip") or {}).get("pentes", [])
+            chip = {"chip": chave, "nome": conhecimento.CHIPS[chave]["nome"], "confianca": "escolhido por você",
+                    "motivo": "Escolhido à mão.", "manual": True}
+            self._aplicar_chip(e, chip, pentes)
+            self._reg(e, "Memória", f"Chip escolhido à mão: {chip['nome']}.")
+        return self._acao(f)
+
+    @_seguro
+    def memoria_opcoes_chip(self):
+        return {"opcoes": conhecimento.OPCOES}
+
+    @_seguro
+    def memoria_medir(self):
+        """Mede a banda e guarda junto com a latência do perfil estável atual."""
+        gbps = testes.medir_banda()
+
+        def f(e):
+            p = e["mem"]["estavel"]
+            med = {"quando": motor.agora_iso(), "freq": p["freq"], "tCL": p["tCL"], "tRCDRD": p["tRCDRD"],
+                   "tRFC": p["tRFC"], "gbps": gbps, "lat_cas_ns": round(p["tCL"] * 2000 / p["freq"], 2),
+                   "trfc_ns": round(motor.ns_trfc(p))}
+            e["mem"].setdefault("medicoes", []).append(med)
+            del e["mem"]["medicoes"][:-40]
+            return med
         return self._acao(f)
 
     # ------------------------------------------------------------ processador
@@ -383,7 +467,9 @@ class Api:
         try:
             e = estado.carregar()
             if s["tipo"] == "memoria" and e["mem"]["teste"] and e["mem"]["teste"]["situacao"] == "testar":
-                self.mem_resultado(passou, motivo)
+                r = self.mem_resultado(passou, motivo)
+                if r.get("resultado") == "passou":
+                    self.memoria_medir()  # registra a banda do novo perfil estável
             elif s["tipo"] == "nucleos" and e["cpu"]["teste"] and e["cpu"]["teste"]["situacao"] == "ativo":
                 self.cpu_resultado(passou, motivo)
         except Exception:

@@ -29,7 +29,8 @@ def novo() -> dict:
     return {
         "versao_estado": VERSAO_ESTADO,
         "mem": {"estavel": dict(motor.PADRAO_MEM), "confirmado": False, "teste": None,
-                "feitos": [], "mais_tensao": False},
+                "feitos": [], "mais_tensao": False, "busca": {}, "reinicios": 0,
+                "chip": None, "alvos": None, "medicoes": []},
         "cpu": {"estavel": 0, "teste": None, "feito": False, "perfil": {}},
         "config": {"verificar_atualizacao": True, "versao_ignorada": "", "animacoes": True},
         "historico": [],
@@ -41,7 +42,7 @@ def _mesclar(base: dict, lido: dict) -> dict:
     for k, v in base.items():
         if k not in lido or (isinstance(v, dict) and not isinstance(lido[k], dict)):
             lido[k] = copy.deepcopy(v)
-        elif isinstance(v, dict) and k not in ("estavel", "perfil", "teste"):
+        elif isinstance(v, dict) and k not in ("estavel", "perfil", "teste", "busca", "alvos", "chip"):
             _mesclar(v, lido[k])
     return lido
 

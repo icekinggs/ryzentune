@@ -126,6 +126,24 @@
         </div>
       </article>
 
+      <article class="bloco" id="bloco-chip">
+        <div class="bloco-topo">
+          <h3>O que a sua memória aguenta</h3>
+          <button class="botao fantasma pequeno" id="chip-ler">Ler os pentes de novo</button>
+        </div>
+        <div class="chip-topo">
+          <div>
+            <p class="chip-nome" id="chip-nome">Identificando os chips…</p>
+            <p class="nota" id="chip-motivo"></p>
+          </div>
+          <label class="campo-inline chip-troca">Não é esse chip?
+            <select id="chip-escolha"></select></label>
+        </div>
+        <div id="chip-pentes" class="pentes"></div>
+        <div id="chip-previsao"></div>
+        <p class="nota" id="chip-economia"></p>
+      </article>
+
       <article class="bloco" id="bloco-etapa">
         <div class="bloco-topo">
           <h3>Próximo ajuste</h3>
@@ -150,6 +168,15 @@
         </div>
         <div class="grade-timings compacta" id="perfil-estavel"></div>
         <p class="nota" id="limites"></p>
+      </article>
+
+      <article class="bloco">
+        <div class="bloco-topo">
+          <h3>Medições</h3>
+          <button class="botao fantasma pequeno" id="mem-medir">Medir o perfil atual</button>
+        </div>
+        <p class="nota">Cada perfil estável é medido sozinho depois do teste. Latência menor e banda maior são melhores.</p>
+        <div id="medicoes"></div>
       </article>
     </section>
 

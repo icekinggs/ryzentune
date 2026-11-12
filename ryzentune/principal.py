@@ -65,13 +65,13 @@ def _autoteste(log) -> int:
         import numpy  # noqa: F401
         import webview  # noqa: F401
 
-        from . import api, boot, estado, hardware, motor, testes, zen  # noqa: F401
+        from . import api, boot, conhecimento, estado, hardware, motor, spd, testes, zen  # noqa: F401
         assert motor.validar_perfil(motor.PADRAO_MEM) == []
         assert hardware.classificar_cpu("AMD Ryzen 7 5700X3D 8-Core Processor", 8).suporta_co
         assert testes.carga_referencia() == testes.carga_referencia()
         for arq in ("index.html", "estilo.css", "app.js"):
             assert os.path.isfile(os.path.join(_pasta_web(), arq)), arq
-        for arq in ("AMDFamily17.bin", "RyzenSMU.bin"):
+        for arq in ("AMDFamily17.bin", "RyzenSMU.bin", "SmbusPIIX4.bin"):
             from .pawnio import pasta_recursos
             assert os.path.isfile(os.path.join(pasta_recursos(), "pawnio", arq)), arq
         estado.carregar()
@@ -99,6 +99,25 @@ def _diagnostico(destino: str) -> int:
                     r[nome + "_erro"] = repr(ex)
     except Exception as ex:
         r["erro"] = repr(ex)
+    try:
+        from . import conhecimento, spd
+        from .zen import SMBus
+        bus = SMBus()
+        try:
+            brutos = bus.ler_spds()
+        finally:
+            bus.fechar()
+        r["spd_bruto"] = {str(k): v.hex() for k, v in brutos.items()}
+        decod = []
+        for _slot, dados in sorted(brutos.items()):
+            try:
+                decod.append(spd.decodificar(dados))
+            except ValueError as ex:
+                decod.append({"erro": str(ex)})
+        r["spd"] = decod
+        r["chip"] = conhecimento.identificar([d for d in decod if "erro" not in d])
+    except Exception as ex:
+        r["spd_erro"] = repr(ex)
     with open(destino, "w", encoding="utf-8") as f:
         json.dump(r, f, ensure_ascii=False, indent=2, default=str)
     return 0

@@ -73,6 +73,7 @@ function irPara(p) {
   $$(".pagina").forEach((s) => s.classList.toggle("ativa", s.id === `pagina-${p}`));
   $("main").scrollTop = 0;
   if (p === "memoria" || p === "processador") lerTimings();
+  if (p === "memoria") identificarChip();
 }
 
 /* ---------------------------------------------------------------- abertura */
@@ -105,6 +106,9 @@ async function iniciar() {
   laçoVivo();
   laçoTeste();
   if (S.estado.config.verificar_atualizacao) verificarAtualizacao(false);
+  const op = await api.memoria_opcoes_chip();
+  if (op && op.opcoes) $("#chip-escolha").innerHTML = op.opcoes.map(([k, n]) => `<option value="${esc(k)}">${esc(n)}</option>`).join("");
+  desenharChip();
 }
 
 function aplicarAnimacoes() {
@@ -243,6 +247,58 @@ function desenharMemoria() {
   $("#limites").textContent = m.feitos.length ? `Limite encontrado em: ${[...new Set(m.feitos)].map((f) => ETAPAS[f]).join(", ")}.` : "";
 
   desenharEtapaMem();
+  desenharChip();
+}
+
+/* ---------------------------------------------------------------- inteligência */
+let identificando = false;
+async function identificarChip(forcar = false) {
+  if (identificando || (!forcar && S.estado.mem.chip)) return;
+  identificando = true;
+  $("#chip-nome").textContent = "Lendo os pentes…";
+  await chamar("memoria_identificar");
+  identificando = false;
+  desenharChip();
+}
+
+function desenharChip() {
+  const m = S.estado.mem, c = m.chip, a = m.alvos;
+  if (!c) { if (!identificando) $("#chip-nome").textContent = "Ainda não identificado."; return; }
+  const cls = { alta: "ok", "média": "sinal", baixa: "acao" }[c.confianca] || "";
+  $("#chip-nome").innerHTML = `${esc(c.nome)}<span class="etiqueta ${cls}">confiança ${esc(c.confianca)}</span>`;
+  $("#chip-motivo").textContent = c.motivo + (a?.nota ? ` ${a.nota}` : "");
+  const sel = $("#chip-escolha");
+  if (sel.options.length) sel.value = c.chip;
+
+  $("#chip-pentes").innerHTML = (c.pentes || []).map((p) => {
+    const xmp = p.xmp ? `, XMP ${p.xmp.mts} CL${p.xmp.cl}` : "";
+    return `<span class="pente">Slot ${p.slot + 1}: <b>${esc(p.modelo || "sem nome")}</b>, ${p.tamanho_gb ?? "?"} GB, ${p.ranks} rank${p.ranks > 1 ? "s" : ""}, chips ${esc(p.fabricante_dram)} ${p.densidade_gbit ?? "?"} Gb x${p.largura ?? "?"}${esc(xmp)}</span>`;
+  }).join("");
+
+  if (a) {
+    const e = m.estavel, nsAtual = (e.tRFC * 2000) / e.freq;
+    const itens = [
+      ["Frequência", e.freq, a.freq, " MT/s", e.freq >= a.freq],
+      ["tCL", e.tCL, a.tCL, "", e.tCL <= a.tCL],
+      ["tRCDRD", e.tRCDRD, a.tRCDRD, "", e.tRCDRD <= a.tRCDRD],
+      ["tRP", e.tRP, a.tRP, "", e.tRP <= a.tRP],
+      ["tRFC", Math.round(nsAtual), a.trfc_ns, " ns", nsAtual <= a.trfc_ns + 1],
+    ];
+    $("#chip-previsao").innerHTML = `<div class="previsao">${itens.map(([n, agora, alvo, u, ok]) =>
+      `<div class="prev${ok ? " chegou" : ""}"><span>${esc(n)}</span><b>${agora}</b><i>até</i><b class="alvo">${alvo}</b>${u ? `<span>${esc(u.trim())}</span>` : ""}</div>`).join("")}</div>`;
+  } else $("#chip-previsao").innerHTML = "";
+
+  const eco = m.economia || { usados: 0, linear: 0 };
+  $("#chip-economia").textContent = eco.usados
+    ? `A previsão começa cada ajuste no valor esperado para o seu chip e depois divide o intervalo ao meio. Até agora: ${eco.usados} reinício(s); de um em um seriam ${eco.linear}.`
+    : "A previsão começa cada ajuste no valor esperado para o seu chip e depois divide o intervalo ao meio: menos reinícios para chegar ao mesmo resultado.";
+
+  const med = m.medicoes || [];
+  if (!med.length) { $("#medicoes").innerHTML = `<p class="vazio">Nenhuma medição ainda.</p>`; return; }
+  const melhorLat = Math.min(...med.map((x) => x.lat_cas_ns));
+  $("#medicoes").innerHTML = `<table class="tabela-medicoes"><thead><tr><th>Perfil</th><th>Latência CAS</th><th>tRFC</th><th>Banda</th><th>Quando</th></tr></thead><tbody>${
+    [...med].reverse().map((x) => `<tr class="${x.lat_cas_ns === melhorLat ? "melhor" : ""}"><td>${x.freq} CL${x.tCL}-${x.tRCDRD}</td><td class="num">${x.lat_cas_ns.toFixed(2)} ns</td><td class="num">${x.trfc_ns} ns</td><td class="num">${x.gbps} GB/s</td><td>${esc(x.quando.replace("T", " ").slice(0, 16))}</td></tr>`).join("")
+  }</tbody></table>`;
 }
 
 function marcarPassos(lista, atual, ordem) {
@@ -502,6 +558,16 @@ function ligarEventos() {
     if (r) aviso("Ponto de partida salvo.", "ok");
   };
   $("#mem-pular").onclick = () => chamar("mem_pular");
+  $("#chip-ler").onclick = () => identificarChip(true);
+  $("#chip-escolha").onchange = (e) => chamar("memoria_escolher_chip", e.target.value);
+  $("#mem-medir").onclick = async (e) => {
+    e.target.disabled = true;
+    e.target.textContent = "Medindo…";
+    const r = await chamar("memoria_medir");
+    e.target.disabled = false;
+    e.target.textContent = "Medir o perfil atual";
+    if (r) aviso(`Banda medida: ${r.resultado.gbps} GB/s.`, "ok");
+  };
   $("#mem-cancelar").onclick = () => chamar("mem_cancelar");
   $("#mem-recomecar").onclick = async () => {
     if (await confirmar("Recomeçar a busca", "Os limites encontrados são esquecidos e a busca recomeça a partir do perfil estável.", "Recomeçar")) chamar("mem_recomecar");

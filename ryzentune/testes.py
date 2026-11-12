@@ -353,3 +353,26 @@ def cpus_por_nucleo() -> list[int]:
         fisicos = logicos
     passo = max(1, logicos // max(1, fisicos))
     return list(range(0, fisicos * passo, passo))
+
+
+def medir_banda(segundos: float = 3.0, mb: int = 512) -> float:
+    """Banda de cópia da memória (GB/s), com todos os núcleos. Rápido: só para comparar perfis."""
+    import numpy as np
+    n = max(1, os.cpu_count() or 1)
+    por = mb * 1024 * 1024 // 8 // n
+    fontes = [np.ones(por, np.uint64) for _ in range(n)]
+    destinos = [np.empty(por, np.uint64) for _ in range(n)]
+    totais = [0] * n
+    fim = time.perf_counter() + segundos
+
+    def copiar(i):
+        while time.perf_counter() < fim:
+            np.copyto(destinos[i], fontes[i])
+            totais[i] += fontes[i].nbytes * 2  # leitura + escrita
+    inicio = time.perf_counter()
+    ts = [threading.Thread(target=copiar, args=(i,)) for i in range(n)]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    return round(sum(totais) / (time.perf_counter() - inicio) / 1e9, 1)
