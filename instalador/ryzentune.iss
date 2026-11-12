@@ -43,6 +43,9 @@ Name: "atalho"; Description: "Criar atalho na Área de Trabalho"; Flags: uncheck
 
 [Files]
 Source: "..\dist\RyzenTune\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; driver PawnIO (namazso, assinado). Só é instalado se ainda não existir; nunca é removido pelo
+; desinstalador, porque outros programas (ZenTimings, LibreHardwareMonitor...) também o usam.
+Source: "..\terceiros\baixado\PawnIO_setup.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 [InstallDelete]
 ; remove arquivos de versões antigas que não existem mais
@@ -62,6 +65,40 @@ Filename: "{app}\RyzenTune.exe"; Flags: nowait skipifnotsilent
 Filename: "{app}\RyzenTune.exe"; Parameters: "--remover-tarefa"; Flags: runhidden waituntilterminated; RunOnceId: "RemoverTarefa"
 
 [Code]
+var
+  PrecisaReiniciar: Boolean;
+
+function PawnIOInstalado(): Boolean;
+var
+  Local: String;
+begin
+  Result := RegQueryStringValue(HKLM64, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\PawnIO',
+                                'InstallLocation', Local) and FileExists(AddBackslash(Local) + 'PawnIOLib.dll');
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  Codigo: Integer;
+begin
+  if (CurStep = ssPostInstall) and not PawnIOInstalado() then
+  begin
+    WizardForm.StatusLabel.Caption := 'Instalando o driver de acesso ao hardware (PawnIO)...';
+    if Exec(ExpandConstant('{tmp}\PawnIO_setup.exe'), '-install -silent', '', SW_HIDE, ewWaitUntilTerminated, Codigo) then
+    begin
+      if Codigo = 3010 then
+        PrecisaReiniciar := True
+      else if Codigo <> 0 then
+        SuppressibleMsgBox('O driver PawnIO não foi instalado (código ' + IntToStr(Codigo) + '). ' +
+          'Sem ele o RyzenTune não lê nem ajusta o hardware. Instale-o em https://pawnio.eu', mbError, MB_OK, IDOK);
+    end;
+  end;
+end;
+
+function NeedRestart(): Boolean;
+begin
+  Result := PrecisaReiniciar;
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   Dados: String;

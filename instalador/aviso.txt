@@ -3,11 +3,19 @@
 O RyzenTune ajuda a encontrar, um passo de cada vez, os melhores timings de memória e o
 Curve Optimizer de processadores AMD Ryzen AM4 (séries 1000 a 5000).
 
+O que vai ser instalado:
+- O RyzenTune.
+- O driver PawnIO (pawnio.eu, assinado digitalmente), se ainda não estiver instalado. É
+  por ele que o RyzenTune lê os timings e ajusta o processador, sem precisar de outros
+  programas. Ele é compartilhado com ZenTimings, LibreHardwareMonitor e outros, por isso não
+  é removido quando você desinstala o RyzenTune.
+
 Como ele trabalha:
 - Nada muda na hora. Os timings de memória você mesmo digita na BIOS, seguindo a tabela
-  do app. O Curve Optimizer é aplicado por uma tarefa agendada só no próximo boot e some
-  ao desligar o PC.
-- Cada ajuste é testado. Se falhar, o app volta para o último valor estável.
+  do app, e o RyzenTune confere no hardware se ficou certo. O Curve Optimizer é aplicado
+  só no próximo boot e some ao desligar o PC.
+- Cada ajuste é testado pelos testes de memória e de núcleos que vêm dentro do app. Se
+  falhar, o app volta para o último valor estável.
 
 Riscos:
 - Overclock e undervolt podem causar travamentos, telas azuis e perda de trabalho não

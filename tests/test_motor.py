@@ -109,8 +109,3 @@ def test_co_nao_aplica_sem_suporte():
     e["cpu"]["perfil"] = hardware.classificar_cpu("AMD Ryzen 7 3700X", 8).to_dict()
     e["cpu"]["estavel"] = -20
     assert motor.valor_co_no_boot(e) == 0
-
-
-def test_args_pbo2():
-    assert motor.args_pbo2("{todos}", -10, 3) == ["-10", "-10", "-10"]
-    assert motor.args_pbo2("{c} {c}", -5, 8) == ["-5", "-5"]

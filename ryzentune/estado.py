@@ -30,10 +30,8 @@ def novo() -> dict:
         "versao_estado": VERSAO_ESTADO,
         "mem": {"estavel": dict(motor.PADRAO_MEM), "confirmado": False, "teste": None,
                 "feitos": [], "mais_tensao": False},
-        "cpu": {"estavel": 0, "teste": None, "feito": False, "perfil": {},
-                "pbo2": "", "args": "{todos}"},
-        "ferramentas": {"tm5": "", "corecycler": ""},
-        "config": {"verificar_atualizacao": True, "versao_ignorada": ""},
+        "cpu": {"estavel": 0, "teste": None, "feito": False, "perfil": {}},
+        "config": {"verificar_atualizacao": True, "versao_ignorada": "", "animacoes": True},
         "historico": [],
     }
 

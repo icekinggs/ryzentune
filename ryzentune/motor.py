@@ -244,9 +244,3 @@ def valor_co_no_boot(e: dict) -> int:
     if not c["perfil"].get("suporta_co"):
         return 0
     return c["teste"]["valor"] if c["teste"] else c["estavel"]
-
-
-def args_pbo2(modelo: str, valor: int, nucleos: int) -> list[str]:
-    """'{c}' = valor de um núcleo; '{todos}' = o valor repetido para cada núcleo."""
-    texto = modelo.replace("{todos}", " ".join([str(valor)] * nucleos)).replace("{c}", str(valor))
-    return texto.split()

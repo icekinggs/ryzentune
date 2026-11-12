@@ -1,4 +1,4 @@
-"""Tudo que conversa com o Windows: WMI, eventos, tarefa agendada, reinício, PBO2 Tuner."""
+"""Tudo que conversa com o Windows: WMI, eventos, tarefa agendada, reinício."""
 from __future__ import annotations
 
 import ctypes
@@ -155,19 +155,6 @@ def reiniciar(bios: bool) -> tuple[bool, str]:
     cmd = ["shutdown", "/r", "/t", "5"] + (["/fw"] if bios else [])
     r = subprocess.run(cmd, capture_output=True, creationflags=SEM_JANELA)
     return r.returncode == 0, (r.stdout + r.stderr).decode("mbcs", "replace").strip()
-
-
-def rodar_pbo2(exe: str, args: list[str]) -> bool:
-    if not exe or not os.path.isfile(exe):
-        log.warning("PBO2 Tuner não encontrado: %s", exe)
-        return False
-    try:
-        subprocess.Popen([exe] + args, cwd=os.path.dirname(exe))
-        log.info("PBO2 Tuner: %s", " ".join(args))
-        return True
-    except OSError as ex:
-        log.error("falha ao abrir PBO2 Tuner: %r", ex)
-        return False
 
 
 class InstanciaUnica:

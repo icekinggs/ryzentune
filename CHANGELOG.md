@@ -3,6 +3,21 @@
 Formato: cada versão tem uma seção `## [X.Y.Z] - AAAA-MM-DD`. O texto da seção vira a descrição da
 release no GitHub e aparece no aviso de atualização do app.
 
+## [2.0.0] - 2026-11-12
+
+Tudo dentro do app, com interface nova.
+
+- Interface nova com abertura animada, painel ao vivo (temperatura, FCLK, UCLK, memória e SoC) e passo a
+  passo para cada ajuste.
+- Lê os timings, o GearDown, os clocks e as tensões direto do processador. Não precisa mais do ZenTimings.
+- Confere sozinho, depois do boot, se a BIOS aplicou exatamente o que foi pedido e mostra o que ficou
+  diferente.
+- Teste de memória e teste de núcleos embutidos, que reprovam a etapa sozinhos quando acham erro. Não precisa
+  mais do TestMem5 nem do CoreCycler.
+- Curve Optimizer aplicado direto no processador e lido de volta núcleo por núcleo. Não precisa mais do
+  PBO2 Tuner.
+- O instalador inclui o driver PawnIO (assinado), usado para acessar o hardware.
+
 ## [1.0.0] - 2026-11-12
 
 Primeira versão.

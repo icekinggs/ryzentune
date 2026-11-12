@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RyzenTune</title>
+<link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+
+<!-- ============ abertura ============ -->
+<div id="abertura" aria-live="polite">
+  <svg class="chip" viewBox="0 0 240 240" aria-hidden="true">
+    <defs>
+      <linearGradient id="g-sinal" x1="0" x2="1">
+        <stop offset="0" stop-color="#5BE3E8" stop-opacity="0"/>
+        <stop offset=".5" stop-color="#5BE3E8"/>
+        <stop offset="1" stop-color="#5BE3E8" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <g class="pinos">
+      <path d="M70 18v26M95 18v26M120 18v26M145 18v26M170 18v26"/>
+      <path d="M70 196v26M95 196v26M120 196v26M145 196v26M170 196v26"/>
+      <path d="M18 70h26M18 95h26M18 120h26M18 145h26M18 170h26"/>
+      <path d="M196 70h26M196 95h26M196 120h26M196 145h26M196 170h26"/>
+    </g>
+    <rect class="corpo" x="44" y="44" width="152" height="152" rx="14"/>
+    <rect class="die" x="72" y="72" width="96" height="96" rx="4"/>
+    <g class="trilhas">
+      <path d="M72 96h-28M72 144h-28M168 108h28M168 132h28M108 72V44M132 168v28"/>
+      <path d="M84 84h24v24h-24zM132 84h24v24h-24zM84 132h24v24h-24zM132 132h24v24h-24z"/>
+    </g>
+    <path class="sinal" d="M0 120 L60 120 L72 120 L80 98 L90 142 L100 86 L110 154 L120 120 L130 104 L140 136 L150 120 L240 120"/>
+  </svg>
+  <h1 class="marca">RyzenTune</h1>
+  <p id="abertura-status">Ligando os instrumentos</p>
+</div>
+
+<!-- ============ app ============ -->
+<div id="app" hidden>
+  <nav class="trilho" aria-label="Seções">
+    <div class="logo">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/><path class="pulso" d="M7 12h3l1-3 2 6 1-3h3"/></svg>
+      <span>RyzenTune</span>
+    </div>
+    <button class="nav ativo" data-pagina="painel"><svg viewBox="0 0 24 24"><path d="M4 13a8 8 0 0 1 16 0"/><path d="M12 13l4-4"/><path d="M4 18h16"/></svg>Painel</button>
+    <button class="nav" data-pagina="memoria"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="10" rx="1"/><path d="M7 7v10M11 7v10M15 7v10M3 20h18M6 17v3M18 17v3"/></svg>Memória</button>
+    <button class="nav" data-pagina="processador"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg>Processador</button>
+    <button class="nav" data-pagina="testes"><svg viewBox="0 0 24 24"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg>Testes</button>
+    <button class="nav" data-pagina="historico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Histórico</button>
+    <div class="espaco"></div>
+    <button class="nav" data-pagina="ajustes"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>Ajustes</button>
+    <p class="versao" id="versao"></p>
+  </nav>
+
+  <main>
+    <div id="faixa-atualizacao" class="faixa" hidden>
+      <span id="faixa-texto"></span>
+      <button class="botao primario pequeno" id="faixa-instalar">Instalar agora</button>
+      <button class="botao fantasma pequeno" id="faixa-depois">Depois</button>
+    </div>
+
+    <!-- ===== Painel ===== -->
+    <section class="pagina ativa" id="pagina-painel">
+      <header class="cabeca">
+        <h2>Painel</h2>
+        <p id="painel-sub" class="sub"></p>
+      </header>
+      <div id="aviso-driver" class="aviso" hidden></div>
+      <div id="aviso-travamentos" class="aviso" hidden></div>
+
+      <div class="instrumento">
+        <div class="mostrador">
+          <svg viewBox="0 0 200 120" class="arco" aria-hidden="true">
+            <path class="arco-fundo" d="M20 110 A80 80 0 0 1 180 110"/>
+            <path class="arco-valor" id="arco-temp" d="M20 110 A80 80 0 0 1 180 110"/>
+          </svg>
+          <div class="leitura-grande"><span id="temp">--</span><small>°C</small></div>
+          <p class="rotulo">Temperatura do processador (Tctl)</p>
+        </div>
+        <div class="leituras">
+          <div class="leitura"><span class="valor" id="v-mclk">--</span><span class="unidade">MT/s</span><p>Memória</p></div>
+          <div class="leitura"><span class="valor" id="v-fclk">--</span><span class="unidade">MHz</span><p>FCLK</p></div>
+          <div class="leitura"><span class="valor" id="v-uclk">--</span><span class="unidade">MHz</span><p>UCLK</p></div>
+          <div class="leitura"><span class="valor" id="v-vsoc">--</span><span class="unidade">V</span><p>SoC</p></div>
+          <div class="sinal-vivo" aria-hidden="true"><svg viewBox="0 0 300 40" preserveAspectRatio="none"><polyline id="traco" points=""/></svg></div>
+        </div>
+      </div>
+
+      <div class="colunas">
+        <article class="bloco">
+          <h3>Sistema</h3>
+          <dl class="ficha" id="ficha-sistema"></dl>
+        </article>
+        <article class="bloco">
+          <h3>Busca da memória</h3>
+          <div id="resumo-mem"></div>
+          <button class="botao" data-ir="memoria">Abrir memória</button>
+        </article>
+        <article class="bloco">
+          <h3>Curve Optimizer</h3>
+          <div id="resumo-cpu"></div>
+          <button class="botao" data-ir="processador">Abrir processador</button>
+        </article>
+      </div>
+    </section>
+
+    <!-- ===== Memória ===== -->
+    <section class="pagina" id="pagina-memoria">
+      <header class="cabeca">
+        <h2>Memória</h2>
+        <p class="sub">Um ajuste por vez. Você digita na BIOS, o RyzenTune confere e testa.</p>
+      </header>
+
+      <article class="bloco">
+        <div class="bloco-topo">
+          <h3>Rodando agora</h3>
+          <button class="botao fantasma pequeno" id="mem-ler">Ler de novo</button>
+        </div>
+        <div class="grade-timings" id="timings-agora"><p class="vazio">Lendo os timings…</p></div>
+        <div id="ponto-partida" class="ponto-partida" hidden>
+          <p>Use estes valores como ponto de partida. O RyzenTune não consegue ler a tensão da memória: confira na BIOS e digite aqui.</p>
+          <label class="campo-inline">Tensão da memória (DRAM Voltage)
+            <input type="number" id="vdram" step="0.005" min="1.10" max="1.45" value="1.35"> V</label>
+          <button class="botao primario" id="mem-usar">Usar como ponto de partida</button>
+        </div>
+      </article>
+
+      <article class="bloco" id="bloco-etapa">
+        <div class="bloco-topo">
+          <h3>Próximo ajuste</h3>
+          <div class="acoes-secundarias">
+            <button class="botao fantasma pequeno" id="mem-pular">Pular este ajuste</button>
+            <button class="botao fantasma pequeno" id="mem-cancelar">Cancelar etapa</button>
+          </div>
+        </div>
+        <ol class="passos" id="mem-passos">
+          <li data-p="preparada">Preparar</li>
+          <li data-p="aplicada">Aplicar na BIOS</li>
+          <li data-p="conferir">Conferir</li>
+          <li data-p="testar">Testar</li>
+        </ol>
+        <div id="etapa-corpo"></div>
+      </article>
+
+      <article class="bloco">
+        <div class="bloco-topo">
+          <h3>Último perfil estável</h3>
+          <button class="botao fantasma pequeno" id="mem-recomecar">Recomeçar a busca</button>
+        </div>
+        <div class="grade-timings compacta" id="perfil-estavel"></div>
+        <p class="nota" id="limites"></p>
+      </article>
+    </section>
+
+    <!-- ===== Processador ===== -->
+    <section class="pagina" id="pagina-processador">
+      <header class="cabeca">
+        <h2>Processador</h2>
+        <p class="sub">Curve Optimizer: menos tensão, menos calor e boost alto por mais tempo.</p>
+      </header>
+      <article class="bloco" id="cpu-explica"></article>
+      <article class="bloco">
+        <div class="bloco-topo">
+          <h3>Margem por núcleo</h3>
+          <span class="nota" id="co-fonte"></span>
+        </div>
+        <div class="barras" id="co-barras"></div>
+      </article>
+      <article class="bloco" id="bloco-cpu-etapa">
+        <div class="bloco-topo">
+          <h3>Busca do Curve Optimizer</h3>
+          <div class="acoes-secundarias">
+            <button class="botao fantasma pequeno" id="cpu-zerar">Voltar para 0</button>
+            <button class="botao fantasma pequeno" id="cpu-recomecar">Recomeçar a busca</button>
+          </div>
+        </div>
+        <ol class="passos" id="cpu-passos">
+          <li data-p="preparar">Preparar</li>
+          <li data-p="pendente">Reiniciar</li>
+          <li data-p="ativo">Testar os núcleos</li>
+        </ol>
+        <div id="cpu-corpo"></div>
+      </article>
+    </section>
+
+    <!-- ===== Testes ===== -->
+    <section class="pagina" id="pagina-testes">
+      <header class="cabeca">
+        <h2>Testes</h2>
+        <p class="sub">Os mesmos testes usados na busca, para rodar quando quiser.</p>
+      </header>
+      <div class="colunas duas">
+        <article class="bloco">
+          <h3>Memória</h3>
+          <p>Escreve e confere padrões em quase toda a RAM livre, com todos os núcleos. Qualquer bit trocado é um erro.</p>
+          <div class="linha-campos">
+            <label>Duração <select id="t-mem-min"><option value="10">10 min</option><option value="30" selected>30 min</option><option value="60">1 hora</option><option value="120">2 horas</option></select></label>
+            <label>RAM livre usada <select id="t-mem-pct"><option value="70">70%</option><option value="85" selected>85%</option><option value="90">90%</option></select></label>
+          </div>
+          <button class="botao primario" id="t-mem">Testar a memória</button>
+        </article>
+        <article class="bloco">
+          <h3>Núcleos</h3>
+          <p>Prende uma carga em cada núcleo, um de cada vez, alternando com pausas curtas. Confere cada resultado com a referência.</p>
+          <div class="linha-campos">
+            <label>Tempo por núcleo <select id="t-cpu-seg"><option value="60">1 min</option><option value="180" selected>3 min</option><option value="360">6 min</option></select></label>
+          </div>
+          <button class="botao primario" id="t-cpu">Testar os núcleos</button>
+        </article>
+      </div>
+      <article class="bloco" id="painel-teste" hidden></article>
+    </section>
+
+    <!-- ===== Histórico ===== -->
+    <section class="pagina" id="pagina-historico">
+      <header class="cabeca"><h2>Histórico</h2><p class="sub">Tudo o que foi preparado, aplicado e testado.</p></header>
+      <ol class="linha-tempo" id="historico"></ol>
+    </section>
+
+    <!-- ===== Ajustes ===== -->
+    <section class="pagina" id="pagina-ajustes">
+      <header class="cabeca"><h2>Ajustes</h2></header>
+      <article class="bloco">
+        <h3>Atualizações</h3>
+        <label class="chave"><input type="checkbox" id="cfg-atualizar"><span></span>Procurar versão nova ao abrir</label>
+        <button class="botao" id="cfg-verificar">Procurar agora</button>
+        <p class="nota" id="cfg-atualizacao-msg"></p>
+      </article>
+      <article class="bloco">
+        <h3>Aparência</h3>
+        <label class="chave"><input type="checkbox" id="cfg-animacoes"><span></span>Animações</label>
+      </article>
+      <article class="bloco">
+        <h3>Acesso ao hardware</h3>
+        <dl class="ficha" id="ficha-driver"></dl>
+        <p class="nota">O RyzenTune lê e ajusta o processador pelo driver PawnIO, assinado digitalmente (pawnio.eu), com os módulos oficiais AMDFamily17 e RyzenSMU (LGPL-2.1).</p>
+      </article>
+      <article class="bloco">
+        <h3>Dados</h3>
+        <p class="nota" id="cfg-dados"></p>
+        <button class="botao" id="cfg-pasta">Abrir a pasta de dados</button>
+        <button class="botao fantasma" id="cfg-codigo">Código-fonte no GitHub</button>
+      </article>
+    </section>
+  </main>
+</div>
+
+<dialog id="dialogo">
+  <form method="dialog">
+    <h3 id="dialogo-titulo"></h3>
+    <p id="dialogo-texto"></p>
+    <div class="dialogo-acoes">
+      <button class="botao fantasma" value="nao" id="dialogo-nao">Cancelar</button>
+      <button class="botao primario" value="sim" id="dialogo-sim">Confirmar</button>
+    </div>
+  </form>
+</dialog>
+<div id="avisos" aria-live="polite"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

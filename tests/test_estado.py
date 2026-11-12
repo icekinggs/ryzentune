@@ -16,7 +16,7 @@ def test_migra_estado_antigo():
         json.dump({"mem": {"estavel": {"freq": 3600}}, "cpu": {"estavel": -5}}, f)
     e = estado.carregar()
     assert e["mem"]["estavel"]["freq"] == 3600 and e["mem"]["estavel"]["tCL"] == 16
-    assert e["cpu"]["estavel"] == -5 and e["cpu"]["args"] == "{todos}"
+    assert e["cpu"]["estavel"] == -5 and e["cpu"]["perfil"] == {}
     assert e["config"]["verificar_atualizacao"] is True and e["historico"] == []
 
 
