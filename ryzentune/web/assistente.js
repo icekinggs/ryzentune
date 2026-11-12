@@ -242,6 +242,62 @@ function telaProcessador() {
     links: [["Já usei bastante: confirmar agora", () => chamar("cpu_resultado", true, "")], ["Travou", () => chamar("cpu_resultado", false, "o PC travou (informado por você)")]] };
 }
 
+/* ---------------------------------------------------------------- coluna "sua jornada" */
+const ORDEM = ["freq", "tCL", "tRCDRD", "tRCDWR", "tRP", "tRAS", "tRFC", "grupoRRD", "grupoWTR", "tWR"];
+const CURTO = {
+  freq: "Velocidade", tCL: "Atraso de leitura", tRCDRD: "Abrir linha (leitura)", tRCDWR: "Abrir linha (escrita)",
+  tRP: "Fechar linha", tRAS: "Linha aberta mínima", tRFC: "Recarga", grupoRRD: "Intervalo entre ativações",
+  grupoWTR: "Pausa escrita e leitura", tWR: "Recuperação de escrita",
+};
+
+function valorAlcancado(passo, p) {
+  if (passo === "freq") return `${p.freq}`;
+  if (passo === "tRFC") return `${Math.round((p.tRFC * 2000) / p.freq)} ns`;
+  if (passo === "grupoRRD") return `${p.tRRDS}/${p.tRRDL}/${p.tFAW}`;
+  if (passo === "grupoWTR") return `${p.tWTRS}/${p.tWTRL}`;
+  return `${p[passo]}`;
+}
+
+function jornadaMemoria() {
+  const m = S.estado.mem, p = m.estavel, med = m.medicoes || [];
+  const feitos = new Set(m.feitos), atual = m.teste?.passo;
+  const proximo = atual || ORDEM.find((x) => !feitos.has(x));
+  const inicial = med[0];
+  const ganho = !m.confirmado ? `<p class="ganho">Ainda não começou<small>${esc(S.init.hw.pentes)} pentes, ${esc(S.init.hw.gb)} GB</small></p>`
+    : `<p class="ganho">${inicial && inicial.freq !== p.freq ? `${inicial.freq} → ` : ""}${p.freq} MT/s<small>CL${p.tCL}, latência ${(p.tCL * 2000 / p.freq).toFixed(1)} ns</small></p>`;
+  const itens = ORDEM.map((x) => {
+    const busca = m.busca?.[x];
+    let cls = "", icone = "", valor = "";
+    if (feitos.has(x)) {
+      const melhorou = busca && busca.lo >= 0;
+      cls = melhorou ? "feito" : "falhou";
+      icone = melhorou ? "✓" : "–";
+      valor = valorAlcancado(x, p);
+    } else if (m.confirmado && x === proximo) {
+      cls = "atual"; icone = "•";
+      valor = m.teste ? valorAlcancado(x, m.teste.perfil) : "";
+    }
+    return `<li class="${cls}"><i>${icone}</i><span>${esc(CURTO[x])}</span><b>${esc(valor)}</b></li>`;
+  }).join("");
+  return `<h3>Sua memória</h3>${ganho}<ol class="etapas">${itens}</ol>`;
+}
+
+function jornadaProcessador() {
+  const c = S.estado.cpu, t = c.teste;
+  if (!c.perfil?.suporta_co) return `<h3>Seu processador</h3><p class="ganho">${esc(S.init.cpu.nome || "")}</p>`;
+  const valores = [-5, -10, -15, -20, -25, -30];
+  const NIVEL = { "-5": "Bem leve", "-10": "Leve", "-15": "Moderado", "-20": "Forte", "-25": "Muito forte", "-30": "Máximo" };
+  const limite = c.feito ? valores.find((v) => v < c.estavel) : null;
+  const itens = valores.map((v) => {
+    let cls = "", icone = "";
+    if (v >= c.estavel && c.estavel !== 0) { cls = "feito"; icone = "✓"; }
+    if (t && t.valor === v) { cls = "atual"; icone = "•"; }
+    if (limite === v) { cls = "falhou"; icone = "–"; }
+    return `<li class="${cls}"><i>${icone}</i><span>${NIVEL[v]}</span><b>${v}</b></li>`;
+  }).join("");
+  return `<h3>Seu processador</h3><p class="ganho">${c.estavel ? `Ajuste ${c.estavel}` : "Sem ajuste"}<small>${esc(S.init.cpu.codinome || "")}, ${S.init.cpu.nucleos} núcleos</small></p><ol class="etapas">${itens}</ol>`;
+}
+
 /* ---------------------------------------------------------------- desenho */
 let trilhaEscolhida = false;
 
@@ -252,6 +308,7 @@ function desenharAssistente() {
     if (S.estado.cpu.teste && !S.estado.mem.teste) trocarTrilha("processador");
   }
   const tela = trilha === "memoria" ? telaMemoria() : telaProcessador();
+  $("#jornada").innerHTML = trilha === "memoria" ? jornadaMemoria() : jornadaProcessador();
   const alvo = $("#assistente");
   const nova = tela.chave !== ultimaTela;
   ultimaTela = tela.chave;

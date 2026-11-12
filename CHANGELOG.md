@@ -3,6 +3,17 @@
 Formato: cada versão tem uma seção `## [X.Y.Z] - AAAA-MM-DD`. O texto da seção vira a descrição da
 release no GitHub e aparece no aviso de atualização do app.
 
+## [2.1.1] - 2026-11-12
+
+Visual mais organizado.
+
+- Tudo centralizado na tela, em qualquer tamanho de janela.
+- O assistente ganhou a coluna "Sua memória" / "Seu processador": mostra os ajustes já feitos (com o valor
+  alcançado), o atual e os próximos.
+- Os níveis do Curve Optimizer têm nome (leve, moderado, forte…).
+- Sensores: os botões levam ao assistente; corrigido o medidor de temperatura e o anel de progresso dos testes,
+  que podiam ficar vazios.
+
 ## [2.1.0] - 2026-11-12
 
 Muito mais simples de usar.

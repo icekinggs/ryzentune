@@ -64,11 +64,16 @@
 
     <!-- ===== Assistente ===== -->
     <section class="pagina ativa" id="pagina-assistente">
-      <div class="trilhas-assistente" role="tablist">
-        <button class="trilha ativa" data-trilha="memoria" role="tab">Memória</button>
-        <button class="trilha" data-trilha="processador" role="tab">Processador</button>
+      <div class="palco">
+        <div class="trilhas-assistente" role="tablist">
+          <button class="trilha ativa" data-trilha="memoria" role="tab">Memória</button>
+          <button class="trilha" data-trilha="processador" role="tab">Processador</button>
+        </div>
+        <div class="assistente-grade">
+          <aside class="jornada" id="jornada" aria-label="Sua jornada"></aside>
+          <div id="assistente"></div>
+        </div>
       </div>
-      <div id="assistente"></div>
     </section>
 
     <!-- ===== Painel ===== -->
@@ -106,12 +111,12 @@
         <article class="bloco">
           <h3>Busca da memória</h3>
           <div id="resumo-mem"></div>
-          <button class="botao" data-ir="memoria">Abrir memória</button>
+          <button class="botao" data-ir="assistente">Abrir o assistente</button>
         </article>
         <article class="bloco">
           <h3>Curve Optimizer</h3>
           <div id="resumo-cpu"></div>
-          <button class="botao" data-ir="processador">Abrir processador</button>
+          <button class="botao" data-ir="assistente">Abrir o assistente</button>
         </article>
       </div>
     </section>

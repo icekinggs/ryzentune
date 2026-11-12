@@ -12,6 +12,7 @@ export function criarDemo() {
           densidade_gbit: 8, largura: 8, xmp: { mts: 3200, cl: 16 } })) },
       alvos: { freq: 3600, tCL: 16, tRCDRD: 19, tRP: 19, trfc_ns: 320, nota: "O DJR costuma ir além do previsto; o CJR fica perto." },
       economia: { usados: 6, linear: 11 },
+      busca: { freq: { lo: 1 }, tCL: { lo: -1 } },
       medicoes: [
         { quando: "2026-11-12T19:12:00", freq: 3200, tCL: 16, tRCDRD: 18, gbps: 37.5, lat_cas_ns: 10, trfc_ns: 350 },
         { quando: "2026-11-12T19:45:00", freq: 3600, tCL: 16, tRCDRD: 19, gbps: 41.2, lat_cas_ns: 8.89, trfc_ns: 320 },
@@ -29,6 +30,7 @@ export function criarDemo() {
   // cenários para conferir as telas do assistente: index.html?demo=inicio | preparada | testar | pronta | obs
   const cenario = new URLSearchParams(location.search).get("demo") || "preparada";
   const m = estado.mem;
+  if (new URLSearchParams(location.search).has("semanim")) estado.config.animacoes = false;
   if (cenario === "inicio") { m.confirmado = false; m.teste = null; }
   if (cenario === "testar") m.teste.situacao = "testar";
   if (cenario === "pronta") { m.teste = null; m.feitos = ["freq", "tCL", "tRCDRD", "tRCDWR", "tRP", "tRAS", "tRFC", "grupoRRD", "grupoWTR", "tWR"]; }

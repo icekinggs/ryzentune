@@ -136,7 +136,7 @@ function desenharVivo() {
   animarNumero($("#temp"), t ?? null, 0);
   const arco = $("#arco-temp");
   const frac = t == null ? 0 : Math.max(0, Math.min(1, (t - 20) / 75));
-  arco.style.strokeDashoffset = 252 * (1 - frac);
+  arco.style.strokeDashoffset = `${252 * (1 - frac)}px`;
   arco.style.stroke = t >= 85 ? "var(--erro)" : t >= 75 ? "var(--acao)" : "var(--sinal)";
   animarNumero($("#v-mclk"), v.mclk ? v.mclk * 2 : null, 0);
   animarNumero($("#v-fclk"), v.fclk ?? null, 0);
@@ -456,7 +456,7 @@ function desenharTeste(alvo, s) {
   const pct = Math.round((s.fracao || 0) * 100);
   const cor = s.erros > 0 ? "var(--erro)" : s.resultado === "passou" ? "var(--ok)" : "var(--sinal)";
   const anel = `<svg class="anel" viewBox="0 0 150 150"><circle class="anel-fundo" cx="75" cy="75" r="62"/>
-    <circle class="anel-valor" cx="75" cy="75" r="62" style="stroke:${cor};stroke-dashoffset:${389.6 * (1 - (s.fracao || 0))}"/>
+    <circle class="anel-valor" cx="75" cy="75" r="62" style="stroke:${cor};stroke-dashoffset:${389.6 * (1 - (s.fracao || 0))}px"/>
     <text x="75" y="75">${pct}%</text></svg>`;
   let corpo;
   if (s.tipo === "memoria") {
