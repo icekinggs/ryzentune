@@ -1,0 +1,20 @@
+﻿RyzenTune - leia antes de instalar
+
+O RyzenTune ajuda a encontrar, um passo de cada vez, os melhores timings de memória e o
+Curve Optimizer de processadores AMD Ryzen AM4 (séries 1000 a 5000).
+
+Como ele trabalha:
+- Nada muda na hora. Os timings de memória você mesmo digita na BIOS, seguindo a tabela
+  do app. O Curve Optimizer é aplicado por uma tarefa agendada só no próximo boot e some
+  ao desligar o PC.
+- Cada ajuste é testado. Se falhar, o app volta para o último valor estável.
+
+Riscos:
+- Overclock e undervolt podem causar travamentos, telas azuis e perda de trabalho não
+  salvo, principalmente durante os testes. Salve tudo antes de reiniciar.
+- Se a memória não ligar, a placa-mãe normalmente volta ao padrão sozinha; senão, é
+  preciso limpar o CMOS (veja o manual da placa).
+- O app nunca grava diretamente na BIOS e mantém as tensões dentro de limites
+  conservadores (memória até 1,40 V, SoC até 1,125 V).
+
+Use por sua conta e risco. O software é fornecido "como está", sem garantia.
