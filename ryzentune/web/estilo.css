@@ -632,3 +632,46 @@ dialog p { margin: 0; color: var(--texto-2); white-space: pre-line; }
   .sensores-grade { grid-template-columns: 1fr; }
 }
 .picos { margin: -6px 0 12px; }
+
+/* ================= histórico ================= */
+.hist-cabeca { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.hist-resumo { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin: 0 0 8px; padding: 0; list-style: none; }
+.hist-resumo li { padding: 12px 14px; background: var(--superficie); border: 1px solid var(--traco); border-radius: var(--raio-2); }
+.hist-resumo b { display: block; font: 600 26px/1.1 var(--fonte-instr); font-variant-numeric: tabular-nums; }
+.hist-resumo span { color: var(--texto-3); font-size: 12.5px; }
+.hist-resumo .k-passou b { color: var(--ok); }
+.hist-resumo .k-falhou b, .hist-resumo .k-travou b { color: var(--erro); }
+.hist-resumo .k-pulado b { color: var(--texto-2); }
+.hist-resumo .k-medicao b { color: var(--sinal); }
+#hist-resumo > .nota { margin: 0 0 16px; }
+.hist-filtros { display: inline-flex; gap: 4px; margin: 4px 0 8px; padding: 4px; background: var(--superficie);
+  border: 1px solid var(--traco); border-radius: 999px; }
+.hist-filtro { padding: 6px 14px; border: 0; border-radius: 999px; background: none; color: var(--texto-2); cursor: pointer; }
+.hist-filtro:hover { color: var(--texto); }
+.hist-filtro.ativo { background: var(--superficie-2); color: var(--texto); font-weight: 600; }
+.hist-dia { margin: 22px 0 8px; color: var(--texto-2); font: 600 14px var(--fonte-instr); letter-spacing: .02em; }
+.hist-lista { position: relative; margin: 0; padding: 0; list-style: none; max-width: 980px; }
+.hist-lista::before { content: ""; position: absolute; left: 13px; top: 14px; bottom: 14px; width: 2px; background: var(--traco); }
+.hist-lista li { position: relative; display: grid; grid-template-columns: 28px 48px 1fr auto; gap: 12px; align-items: start;
+  padding: 8px 0; }
+.hist-lista li > i { position: relative; z-index: 1; display: grid; place-items: center; width: 28px; height: 28px;
+  border-radius: 50%; border: 2px solid var(--texto-3); background: var(--placa); color: var(--texto-2);
+  font: 700 13px var(--fonte-instr); font-style: normal; }
+.hist-lista time { padding-top: 4px; color: var(--texto-3); font-variant-numeric: tabular-nums; font-size: 13px; }
+.hist-lista .corpo { min-width: 0; padding-top: 3px; }
+.hist-lista .corpo b { font-weight: 600; }
+.hist-lista .corpo p { margin: 2px 0 0; color: var(--texto-2); font-size: 13.5px; }
+.hist-lista .corpo summary { cursor: pointer; }
+.hist-lista .corpo details p { color: var(--texto-3); }
+.hist-lista .vezes { margin-left: 8px; padding: 1px 7px; border-radius: 999px; background: var(--superficie-2);
+  color: var(--texto-3); font-size: 12px; }
+.hist-lista .area { padding-top: 5px; color: var(--texto-3); font-size: 12px; }
+.hist-lista li.rotina .corpo b { font-weight: 400; color: var(--texto-2); }
+.hist-lista li.rotina > i { width: 14px; height: 14px; margin: 7px; font-size: 0; border-width: 2px; }
+.hist-lista .k-passou > i { border-color: var(--ok); background: #12251B; color: var(--ok); }
+.hist-lista .k-falhou > i, .hist-lista .k-travou > i { border-color: var(--erro); background: #2A1616; color: var(--erro); }
+.hist-lista .k-whea > i, .hist-lista .k-aviso > i { border-color: var(--acao); background: #241E12; color: var(--acao); }
+.hist-lista .k-cpu > i, .hist-lista .k-medicao > i { border-color: var(--sinal); background: #10282C; color: var(--sinal); }
+.hist-lista .k-pulado .corpo b { color: var(--texto-2); }
+.hist-lista .k-travou .corpo b { color: #FFD0D0; }
+@media (max-width: 1100px) { .hist-resumo { grid-template-columns: repeat(3, 1fr); } }

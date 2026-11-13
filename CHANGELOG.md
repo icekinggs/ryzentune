@@ -3,6 +3,20 @@
 Formato: cada versão tem uma seção `## [X.Y.Z] - AAAA-MM-DD`. O texto da seção vira a descrição da
 release no GitHub e aparece no aviso de atualização do app.
 
+## [2.3.1] - 2026-11-13
+
+Tela de histórico nova.
+
+- Linha do tempo agrupada por dia ("Hoje", "Ontem"...), com títulos claros e ícone e cor para cada tipo: aprovado,
+  reprovado, pulado, aviso da BIOS, processador.
+- Junta tudo num lugar só: os ajustes, as medições de desempenho e os desligamentos forçados e erros de hardware
+  registrados pelo Windows. Assim dá para ver se um travamento veio logo depois de um ajuste.
+- Menos ruído: mensagens repetidas viram "×4", "etapa preparada" seguida de "pulado" vira uma linha só, e vários pulos
+  seguidos viram um grupo que dá para abrir.
+- Resumo no topo (aprovados, reprovados, pulados, idas à BIOS, medições, travamentos) e filtros: Importante, Tudo,
+  Memória e Processador.
+- Botão "Copiar o histórico", para colar num relatório ou pedido de ajuda.
+
 ## [2.3.0] - 2026-11-13
 
 Memória sem pulos acidentais, Curve Optimizer por núcleo, sensores com histórico e medição de antes e depois.

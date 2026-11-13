@@ -311,8 +311,18 @@
 
     <!-- ===== Histórico ===== -->
     <section class="pagina" id="pagina-historico">
-      <header class="cabeca"><h2>Histórico</h2><p class="sub">Tudo o que foi preparado, aplicado e testado.</p></header>
-      <ol class="linha-tempo" id="historico"></ol>
+      <header class="cabeca hist-cabeca">
+        <div><h2>Histórico</h2><p class="sub">O que foi ajustado, testado e medido, e quando o Windows travou.</p></div>
+        <button class="botao fantasma pequeno" id="hist-copiar">Copiar o histórico</button>
+      </header>
+      <div id="hist-resumo"></div>
+      <div class="hist-filtros" role="group" aria-label="Filtrar o histórico">
+        <button class="hist-filtro ativo" data-f="importante">Importante</button>
+        <button class="hist-filtro" data-f="tudo">Tudo</button>
+        <button class="hist-filtro" data-f="memoria">Memória</button>
+        <button class="hist-filtro" data-f="cpu">Processador</button>
+      </div>
+      <div id="historico" class="historico"></div>
     </section>
 
     <!-- ===== Ajustes ===== -->
@@ -359,5 +369,6 @@
 <script src="app.js"></script>
 <script src="assistente.js"></script>
 <script src="painel.js"></script>
+<script src="historico.js"></script>
 </body>
 </html>

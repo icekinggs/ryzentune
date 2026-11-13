@@ -120,6 +120,7 @@ async function lerTravamentos() {
   $("#travamentos").innerHTML = `<p class="vazio">Lendo o registro do Windows…</p>`;
   const r = await api.travamentos(30);
   const ev = r && !r.erro ? r.eventos : null;
+  if (ev) S.trav = ev;
   if (!ev) { $("#travamentos").innerHTML = `<p class="vazio">Não consegui ler o registro de eventos.</p>`; return; }
   if (!ev.length) {
     $("#travamentos").innerHTML = `<p class="trav-ok"><span>✓</span>Nenhum desligamento forçado nem erro de hardware nos últimos 30 dias.</p>`;

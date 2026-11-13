@@ -76,6 +76,7 @@ function irPara(p) {
   if (p === "memoria" || p === "assistente") identificarChip();
   if (p === "desempenho") abrirDesempenho();
   if (p === "painel") lerTravamentos();
+  if (p === "historico") abrirHistorico();
 }
 
 /* ---------------------------------------------------------------- abertura */
@@ -503,13 +504,6 @@ async function laçoTeste() {
 }
 
 /* ---------------------------------------------------------------- histórico e ajustes */
-function desenharHistorico() {
-  const h = [...S.estado.historico].reverse();
-  $("#historico").innerHTML = h.length ? h.map((x) => {
-    const cls = /^PASSOU/.test(x.texto) ? "passou" : /^FALHOU/.test(x.texto) ? "falhou" : "";
-    return `<li class="${cls}"><time>${esc(x.quando.replace("T", " "))}, ${esc(x.tipo.toLowerCase())}</time>${esc(x.texto)}</li>`;
-  }).join("") : `<li>Nada por aqui ainda. O histórico começa quando você define o ponto de partida da memória.</li>`;
-}
 
 function desenharAjustes() {
   const c = S.estado.config;
