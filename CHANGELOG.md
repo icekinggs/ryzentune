@@ -3,6 +3,24 @@
 Formato: cada versão tem uma seção `## [X.Y.Z] - AAAA-MM-DD`. O texto da seção vira a descrição da
 release no GitHub e aparece no aviso de atualização do app.
 
+## [2.3.0] - 2026-11-13
+
+Memória sem pulos acidentais, Curve Optimizer por núcleo, sensores com histórico e medição de antes e depois.
+
+- Memória: "Pular este ajuste" agora pede confirmação. Antes, o link reaparecia no mesmo lugar e alguns cliques
+  seguidos pulavam a busca inteira.
+- Memória: os ajustes pulados ficam guardados (inclusive os de versões anteriores) e, no fim, o assistente oferece
+  retomá-los, com ou sem mexer de novo na velocidade.
+- Memória: se o chip escolhido à mão não bate com o que o SPD dos pentes diz, o assistente avisa e oferece usar o
+  dos pentes (os valores-alvo dependem disso).
+- Processador: depois do ajuste igual para todos, uma fase núcleo por núcleo. Cada núcleo desce mais 5 sozinho; os
+  que erram no teste voltam e param ali. O valor entra na hora, sem reiniciar.
+- Sensores: velocidade e uso de cada núcleo, tensão dos núcleos (SVI2, conferida com a do SoC), gráficos dos últimos
+  15 minutos com cursor e a lista de travamentos dos últimos 30 dias.
+- Desempenho (página nova): latência real da memória, banda de leitura, escrita e cópia e pontos do processador em um
+  núcleo e em todos. Compara quaisquer duas medições; diferenças abaixo de 2% aparecem como "igual". Depois de cada
+  ajuste de memória aprovado, a memória é medida sozinha.
+
 ## [2.2.1] - 2026-11-12
 
 Correção: a tela ficava parada em "Teste concluído" depois que o teste da memória terminava.

@@ -82,6 +82,24 @@ def eventos_desde(inicio_iso: str) -> tuple[int, int]:
         return -1, -1
 
 
+def eventos_lista(dias: int = 30) -> list[dict]:
+    """Desligamentos forçados (Kernel-Power 41) e erros de hardware (WHEA) dos últimos dias, mais novos primeiro."""
+    s = ps(f"$d=(Get-Date).AddDays(-{int(dias)});"
+           "$k=@(Get-WinEvent -FilterHashtable @{LogName='System';Id=41;"
+           "ProviderName='Microsoft-Windows-Kernel-Power';StartTime=$d} -EA SilentlyContinue|"
+           "%{[pscustomobject]@{quando=$_.TimeCreated.ToString('s');tipo='desligamento'}});"
+           "$w=@(Get-WinEvent -FilterHashtable @{LogName='System';"
+           "ProviderName='Microsoft-Windows-WHEA-Logger';StartTime=$d} -EA SilentlyContinue|"
+           "%{[pscustomobject]@{quando=$_.TimeCreated.ToString('s');tipo='whea'}});"
+           "ConvertTo-Json -Compress -InputObject @($k+$w)")
+    try:
+        d = json.loads(s) if s else []
+    except ValueError:
+        return []
+    d = [d] if isinstance(d, dict) else d
+    return sorted((x for x in d if isinstance(x, dict) and x.get("quando")), key=lambda x: x["quando"], reverse=True)
+
+
 def eh_admin() -> bool:
     try:
         return bool(ctypes.windll.shell32.IsUserAnAdmin())

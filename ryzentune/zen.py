@@ -97,6 +97,16 @@ def temperatura_tctl(v: int) -> float:
     return round(t, 1)
 
 
+# ---------------------------------------------------------------- telemetria SVI2 (Zen 2 / Zen 3)
+SVI2_NUCLEO, SVI2_SOC = 0x5A010, 0x5A00C
+
+
+def tensao_svi2(v: int) -> float | None:
+    """VID de 8 bits nos bits 23:16: tensão = 1,55 V - VID x 6,25 mV. Fora de 0,2-1,6 V é leitura inválida."""
+    t = round(1.55 - ((v >> 16) & 0xFF) * 0.00625, 4)
+    return t if 0.2 <= t <= 1.6 else None
+
+
 # ---------------------------------------------------------------- Curve Optimizer
 CODINOMES = {1: "Renoir", 2: "Picasso", 3: "Matisse", 6: "Raven Ridge", 7: "Raven Ridge 2", 8: "Summit Ridge",
              9: "Pinnacle Ridge", 11: "Vermeer", 13: "Cezanne", 15: "Dali", 22: "Lucienne"}
@@ -241,6 +251,38 @@ class Zen:
             st, _ = self._caixa_mp1().enviar(info["set_todos"], [arg_margem(margem)])
         if st != SMU_OK:
             raise RuntimeError(f"SMU recusou o Curve Optimizer: {SMU_ERROS.get(st, hex(st))}")
+
+    def aplicar_co_nucleos(self, margens: list[int]) -> None:
+        """Uma margem por núcleo, na ordem dos núcleos habilitados (a mesma ordem do Windows)."""
+        if not self.suporta_co():
+            raise RuntimeError(f"Curve Optimizer não suportado neste processador ({self.codinome()})")
+        if any(not -30 <= m <= 0 for m in margens):
+            raise ValueError("margem fora de -30..0")
+        nucleos = self.nucleos_ativos()
+        if len(nucleos) != len(margens):
+            raise RuntimeError(f"{len(margens)} valores para {len(nucleos)} núcleos habilitados")
+        info = CO[self.codinome()]
+        for (ccd, n), m in zip(nucleos, margens, strict=True):
+            with self.pawnio.TravaPCI():
+                st, _ = self._caixa_mp1().enviar(info["set_um"], [mascara_nucleo(ccd, n) | arg_margem(m)])
+            if st != SMU_OK:
+                raise RuntimeError(f"SMU recusou o Curve Optimizer do núcleo {n}: {SMU_ERROS.get(st, hex(st))}")
+
+    def aplicar_co(self, valor) -> None:
+        """Número = todos os núcleos iguais; lista = um valor por núcleo."""
+        if isinstance(valor, list):
+            self.aplicar_co_nucleos([int(v) for v in valor])
+        else:
+            self.aplicar_co_todos(int(valor))
+
+    def tensoes_svi2(self) -> dict:
+        """Tensão do núcleo e do SoC pela telemetria SVI2 (o que o regulador da placa informa)."""
+        try:
+            with self.pawnio.TravaPCI():
+                nucleo, soc = self.ler_smn(SVI2_NUCLEO), self.ler_smn(SVI2_SOC)
+        except Exception:
+            return {}
+        return {k: v for k, v in (("vcore", tensao_svi2(nucleo)), ("vsoc_svi2", tensao_svi2(soc))) if v}
 
     def nucleos_ativos(self) -> list[tuple[int, int]]:
         """(ccd, núcleo físico) habilitados, pelos fusíveis."""

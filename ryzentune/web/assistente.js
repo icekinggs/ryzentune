@@ -218,6 +218,26 @@ function ultimoResultado(tipo) {
   return `<div class="resultado ${passou ? "" : "falhou"}"><span>${passou ? "✓" : "↺"}</span><span>${texto}</span></div>`;
 }
 
+/* Pular agora pede confirmação: na 2.2 o link reaparecia no mesmo lugar e 10 cliques pulavam tudo. */
+async function pularComConfirmacao() {
+  const t = S.estado.mem.teste;
+  const nome = t ? AJUSTES_SIMPLES[t.passo] || t.passo : "este ajuste";
+  if (await confirmar("Pular este ajuste?", `O RyzenTune não vai tentar melhorar ${nome} agora. Você pode retomar os ajustes pulados quando quiser, no fim da busca.`, "Pular"))
+    return chamar("mem_pular");
+}
+
+/* Escolha à mão que não bate com o que os pentes dizem (aconteceu: 'Hynix 16 Gb' em pentes de 8 Gb). */
+function avisoChip() {
+  const m = S.estado.mem, c = m.chip, s = m.chip_spd;
+  if (!c?.manual || !s || s.chip === c.chip || s.chip === "generico") return null;
+  return `<div class="aviso-chip"><p><b>Os pentes dizem outra coisa.</b> Você escolheu <b>${esc(c.nome)}</b>, mas o SPD dos pentes indica
+    <b>${esc(s.nome)}</b>. Os valores-alvo dependem disso.</p><button class="link" data-chip-spd>Usar o que os pentes dizem</button></div>`;
+}
+function ligarAvisoChip(alvo) {
+  const b = alvo.querySelector("[data-chip-spd]");
+  if (b) b.onclick = () => chamar("memoria_usar_spd");
+}
+
 /* ---------------------------------------------------------------- telas da memória */
 function telaMemoria() {
   const m = S.estado.mem, t = m.teste, L = S.leitura;
@@ -294,12 +314,12 @@ function telaMemoria() {
       : L.erro ? `<p class="aviso-leitura erro" title="${esc(L.erro)}">Não consegui ler a memória agora. O número antes da seta é o último valor salvo; os valores novos, em laranja, estão certos.</p>` : "";
     if (!lista.length) {
       return { chave: `${chave}-igual`, ...topo(1, 3), titulo: "A BIOS já está com esses valores",
-        html: `${ultimoResultado("Memória")}${avisoLeitura}<p class="texto">Nada para digitar desta vez. O próximo passo é conferir e testar <b>${esc(nome)}</b>.</p>`,
-        primario: ["Conferir e testar", conferirMem], links: [["Pular este ajuste", () => chamar("mem_pular")]] };
+        html: `${avisoChip() || ""}${ultimoResultado("Memória")}${avisoLeitura}<p class="texto">Nada para digitar desta vez. O próximo passo é conferir e testar <b>${esc(nome)}</b>.</p>`,
+        primario: ["Conferir e testar", conferirMem], links: [["Pular este ajuste", pularComConfirmacao]] };
     }
     return { chave, ...topo(1, 3), larga: lista.length > 6,
       titulo: lista.length === 1 ? "Mude 1 valor na BIOS" : `Mude ${lista.length} valores na BIOS`,
-      html: `${ultimoResultado("Memória")}
+      html: `${avisoChip() || ""}${ultimoResultado("Memória")}
         <p class="texto">Agora vamos melhorar <b>${esc(nome)}</b>. Tire uma foto desta tela com o celular antes de reiniciar.</p>
         ${avisoLeitura}${listaBios(lista, t.passo)}
         <p class="dica"><b>Onde fica na BIOS:</b> ${esc(onde)}</p>`,
@@ -307,7 +327,7 @@ function telaMemoria() {
         if (await confirmar("Reiniciar na BIOS", "Salve o que estiver aberto. O PC reinicia direto na BIOS em 5 segundos.", "Reiniciar agora"))
           chamar("mem_reiniciar_bios");
       }],
-      links: [["Já mudei e reiniciei", conferirMem], ["Pular este ajuste", () => chamar("mem_pular")]],
+      links: [["Já mudei e reiniciei", conferirMem], ["Pular este ajuste", pularComConfirmacao]],
       detalhes: `Todos os outros campos ficam como estão. ${seFalhar}` };
   }
   if (t.situacao === "aplicada") {
@@ -358,8 +378,26 @@ async function seguirDepoisDoTesteMem() {
   desenhar();
 }
 
+function telaPulados(pul) {
+  const m = S.estado.mem, p = m.estavel, temFreq = pul.includes("freq");
+  const lista = pul.map((x) => `<li><span>${esc(CURTO[x])}</span><b>${esc(valorAlcancado(x, p))}</b></li>`).join("");
+  return { chave: `m-pulados-${pul.length}`, topoEsq: "Quase lá", topoDir: `${pul.length} pulados`, fracao: (TOTAL_AJUSTES - pul.length) / TOTAL_AJUSTES,
+    titulo: pul.length === 1 ? "Falta 1 ajuste que você pulou" : `Faltam ${pul.length} ajustes que você pulou`,
+    html: `${avisoChip() || ""}<p class="texto">Estes ajustes ficaram como estavam, sem teste. É neles que está o ganho: hoje a memória roda a
+      <b>${p.freq} MT/s com atraso de leitura ${p.tCL}</b>.</p><ol class="lista-pulados">${lista}</ol>
+      ${temFreq ? `<p class="nota">A velocidade já subiu uma vez. Se preferir apertar os atrasos primeiro e deixar a velocidade como está, use o segundo botão.</p>` : ""}`,
+    primario: ["Retomar os ajustes pulados", () => chamar("mem_retomar_pulados", true)],
+    links: [...(temFreq ? [["Retomar sem mexer na velocidade", () => chamar("mem_retomar_pulados", false)]] : []),
+      ["Deixar como está", async () => {
+        if (await confirmar("Deixar como está", "A memória fica nos valores de hoje. Dá para recomeçar a busca depois, na tela final.", "Deixar"))
+          chamar("mem_aceitar_pulados");
+      }]] };
+}
+
 function telaMemoriaPronta() {
   const m = S.estado.mem, med = m.medicoes || [], p = m.estavel, c = S.estado.cpu;
+  const pul = (m.pulados || []).filter((x) => m.feitos.includes(x));
+  if (pul.length) return telaPulados(pul);
   const ini = med[0], fim = med.length > 1 ? med[med.length - 1] : null;
   const fimAtual = fim && fim.freq === p.freq && fim.tCL === p.tCL ? fim : null;  // medição antiga não vale como "agora"
   const latAgora = Math.round((p.tCL * 2000 / p.freq) * 100) / 100;
@@ -385,8 +423,11 @@ function telaMemoriaPronta() {
 }
 
 /* ---------------------------------------------------------------- telas do processador */
+const rotuloCo = (t) => (t.modo === "nucleos" ? "Por núcleo" : `Valor ${t.valor}`);
+const listaCo = (v, mudados = []) => v.map((x, i) => `<li class="${mudados.includes(i) ? "muda" : ""}"><span>Núcleo ${i + 1}</span><b>${x}</b></li>`).join("");
+
 function telaProcessador() {
-  const c = S.estado.cpu, p = c.perfil || {}, t = c.teste;
+  const c = S.estado.cpu, p = c.perfil || {}, t = c.teste, nc = c.nucleos;
   if (!p.suporta_co) {
     return { chave: "c-nao", titulo: "Seu processador não tem esse ajuste",
       texto: p.geracao === "zen3" ? "O RyzenTune não conseguiu falar com o controlador do processador. Reinicie o PC e abra o app de novo."
@@ -397,9 +438,25 @@ function telaProcessador() {
   if (!t) {
     if (S.estado.mem.teste) return telaUmaCoisaPorVez("memoria");
     if (c.feito || prox === undefined) {
-      return { chave: "c-pronto", topoEsq: "Concluído", fracao: 1, titulo: `Pronto: ajuste em ${c.estavel}`,
-        texto: "Esse é o menor valor que o seu processador aguentou. O RyzenTune aplica sozinho a cada vez que o Windows liga.",
-        links: [["Voltar para 0", () => chamar("cpu_zerar")], ["Tentar de novo", () => chamar("cpu_recomecar")]] };
+      const podeRefinar = c.estavel > -30 && !(nc && nc.feito) && (!nc || nc.estavel.some((v, i) => !nc.limite[i] && v > -30));
+      const porNucleo = !!nc && nc.estavel.some((v) => v !== c.estavel);
+      if (podeRefinar) {
+        return { chave: `c-refinar-${nc ? nc.estavel.join("") : c.estavel}`, topoEsq: nc ? "Núcleo por núcleo" : "Próxima fase", fracao: nc ? 0.5 : 0,
+          titulo: nc ? "Próxima rodada, núcleo por núcleo" : `Todos os núcleos aguentam ${c.estavel}. Agora, um por um`,
+          html: `${ultimoResultado("CPU")}<p class="texto">Todo processador tem núcleos melhores que outros. Agora cada núcleo desce mais 5 sozinho:
+            os que errarem no teste voltam e param ali, os outros continuam.</p>
+            <p class="texto">Desta vez <b>não precisa reiniciar</b>: o valor entra na hora. Se o PC travar, o reinício já volta ao último valor bom.</p>
+            ${porNucleo ? `<ol class="lista-co">${listaCo(nc.estavel)}</ol>` : ""}`,
+          primario: [nc ? "Começar a próxima rodada" : "Começar núcleo por núcleo", () => chamar("cpu_refinar_nucleos")],
+          links: [["Deixar como está", () => chamar("cpu_parar_nucleos")]] };
+      }
+      return { chave: "c-pronto", topoEsq: "Concluído", fracao: 1,
+        titulo: porNucleo ? "Pronto: cada núcleo no seu limite" : `Pronto: ajuste em ${c.estavel}`,
+        html: `<p class="texto">${porNucleo ? "Esses são os menores valores que cada núcleo aguentou." : "Esse é o menor valor que o seu processador aguentou."} O RyzenTune aplica sozinho a cada vez que o Windows liga.</p>
+          ${porNucleo ? `<ol class="lista-co">${listaCo(nc.estavel)}</ol>` : ""}`,
+        primario: ["Medir o desempenho", () => irPara("desempenho")],
+        links: [["Voltar para 0", async () => { if (await confirmar("Voltar para 0", "O Curve Optimizer volta ao padrão no próximo boot e a busca recomeça do zero.", "Voltar para 0")) chamar("cpu_zerar"); }],
+          ["Tentar de novo", () => chamar("cpu_recomecar")]] };
     }
     return { chave: `c-inicio-${prox}`, topoEsq: c.estavel ? `Hoje: ${c.estavel}` : "Começo", fracao: 0,
       titulo: c.estavel ? `Próximo valor: ${prox}` : "Deixar o processador mais frio e rápido",
@@ -407,27 +464,32 @@ function telaProcessador() {
         <p class="texto">Nada muda agora: o valor só vale depois de reiniciar e some quando o PC desliga. Se algo der errado, basta reiniciar.</p>`,
       primario: [`Preparar ${prox}`, () => chamar("cpu_preparar")] };
   }
+  const nucleos = t.modo === "nucleos";
   if (t.situacao === "pendente") {
-    return { chave: "c-pend", topoEsq: `Valor ${t.valor}`, topoDir: "Passo 1 de 3", fracao: 0.15,
-      titulo: "Reinicie para ativar", texto: `O valor ${t.valor} entra em vigor quando o Windows ligar de novo.`,
+    return { chave: "c-pend", topoEsq: rotuloCo(t), topoDir: "Passo 1 de 3", fracao: 0.15,
+      titulo: "Reinicie para ativar", texto: nucleos ? "O processador não aceitou o valor na hora. Ele entra quando o Windows ligar de novo."
+        : `O valor ${t.valor} entra em vigor quando o Windows ligar de novo.`,
       primario: ["Reiniciar agora", async () => {
         if (await confirmar("Reiniciar", "Salve o que estiver aberto. O PC reinicia em 5 segundos.", "Reiniciar agora")) chamar("cpu_reiniciar");
-      }], links: [["Cancelar", () => chamar("cpu_cancelar")]] };
+      }], links: [...(nucleos ? [["Tentar aplicar agora", () => chamar("cpu_aplicar_agora")]] : []), ["Cancelar", () => chamar("cpu_cancelar")]] };
   }
   if (t.situacao === "ativo") {
     const rodando = S.teste?.rodando && S.teste.tipo === "nucleos";
-    return { chave: `c-ativo-${rodando}`, topoEsq: `Valor ${t.valor}`, topoDir: "Passo 2 de 3", fracao: 0.45,
-      titulo: rodando ? "Testando os núcleos…" : "Ativo. Agora o teste dos núcleos",
+    const qtd = nucleos ? t.mudados.length : p.nucleos || 8;
+    return { chave: `c-ativo-${rodando}`, topoEsq: rotuloCo(t), topoDir: "Passo 2 de 3", fracao: 0.45,
+      titulo: rodando ? "Testando os núcleos…" : nucleos ? "Valores novos ativos. Agora o teste" : "Ativo. Agora o teste dos núcleos",
       html: rodando ? `<p class="texto">Um núcleo de cada vez. Pode deixar o PC sozinho.</p><div id="ass-teste"></div>`
-        : `<p class="texto">Leva uns <b>16 minutos</b>: cada núcleo recebe uma carga conferida, com pausas no meio. É nas trocas de velocidade que um valor baixo demais falha.</p>`,
+        : `${nucleos ? `<ol class="lista-co">${listaCo(t.valores, t.mudados)}</ol>` : ""}
+          <p class="texto">Leva uns <b>${Math.max(1, Math.round(qtd * 2))} minutos</b>: ${nucleos ? `cada um dos ${qtd} núcleos que mudaram` : "cada núcleo"} recebe uma carga conferida, com pausas no meio. É nas trocas de velocidade que um valor baixo demais falha.</p>`,
       primario: rodando ? null : ["Começar o teste", () => iniciarTesteCpu(120)],
       links: rodando ? [] : [["O PC travou", () => chamar("cpu_resultado", false, "o PC travou (informado por você)")]] };
   }
   // observando
   const ini = new Date(t.desde_obs), horas = (Date.now() - ini.getTime()) / 36e5;
-  return { chave: "c-obs", topoEsq: `Valor ${t.valor}`, topoDir: "Passo 3 de 3", fracao: 0.75,
+  return { chave: "c-obs", topoEsq: rotuloCo(t), topoDir: "Passo 3 de 3", fracao: 0.75,
     titulo: "Agora é só usar o PC normalmente",
     html: `<p class="texto">O teste passou. Falta ver se ele aguenta o uso do dia a dia: se o PC ficar <b>24 horas</b> sem travar, o RyzenTune confirma sozinho. Se travar ou reiniciar sozinho, ele volta para o valor anterior.</p>
+      ${nucleos ? `<ol class="lista-co">${listaCo(t.valores, t.mudados)}</ol>` : ""}
       <div class="barra-tempo"><i style="width:${Math.min(100, (horas / 24) * 100)}%"></i></div>
       <p class="nota">${Math.min(24, Math.floor(horas))} de 24 horas</p>`,
     links: [["Já usei bastante: confirmar agora", () => chamar("cpu_resultado", true, "")], ["Travou", () => chamar("cpu_resultado", false, "o PC travou (informado por você)")]] };
@@ -459,7 +521,9 @@ function jornadaMemoria() {
   const itens = ORDEM.map((x) => {
     const busca = m.busca?.[x];
     let cls = "", icone = "", valor = "";
-    if (!m.confirmado) { /* ainda não começou: todos neutros */ } else if (feitos.has(x)) {
+    if (!m.confirmado) { /* ainda não começou: todos neutros */ } else if (feitos.has(x) && (m.pulados || []).includes(x)) {
+      cls = "pulado"; icone = "»"; valor = "pulado";
+    } else if (feitos.has(x)) {
       const melhorou = busca && busca.lo >= 0;
       cls = melhorou ? "feito" : "falhou";
       icone = melhorou ? "✓" : "–";
@@ -474,8 +538,19 @@ function jornadaMemoria() {
 }
 
 function jornadaProcessador() {
-  const c = S.estado.cpu, t = c.teste;
+  const c = S.estado.cpu, t = c.teste, nc = c.nucleos;
   if (!c.perfil?.suporta_co) return `<h3>Seu processador</h3><p class="ganho">${esc(S.init.cpu.nome || "")}</p>`;
+  const sub = `<small>${esc(S.init.cpu.codinome || "")}, ${S.init.cpu.nucleos} núcleos</small>`;
+  if (nc) {
+    const valores = t?.modo === "nucleos" ? t.valores : nc.estavel;
+    const itens = valores.map((v, i) => {
+      const testando = t?.modo === "nucleos" && t.mudados.includes(i);
+      const cls = testando ? "atual" : nc.limite[i] ? "feito" : "";
+      return `<li class="${cls}"><i>${testando ? "•" : nc.limite[i] ? "✓" : ""}</i><span>Núcleo ${i + 1}${nc.limite[i] && !testando ? " (limite)" : ""}</span><b>${v}</b></li>`;
+    }).join("");
+    const min = Math.min(...nc.estavel), max = Math.max(...nc.estavel);
+    return `<h3>Seu processador</h3><p class="ganho">${min === max ? `Ajuste ${min}` : `De ${max} a ${min}`}${sub}</p><ol class="etapas">${itens}</ol>`;
+  }
   const valores = [-5, -10, -15, -20, -25, -30];
   const NIVEL = { "-5": "Bem leve", "-10": "Leve", "-15": "Moderado", "-20": "Forte", "-25": "Muito forte", "-30": "Máximo" };
   const limite = c.feito ? valores.find((v) => v < c.estavel) : null;
@@ -486,7 +561,7 @@ function jornadaProcessador() {
     if (limite === v) { cls = "falhou"; icone = "–"; }
     return `<li class="${cls}"><i>${icone}</i><span>${NIVEL[v]}</span><b>${v}</b></li>`;
   }).join("");
-  return `<h3>Seu processador</h3><p class="ganho">${c.estavel ? `Ajuste ${c.estavel}` : "Sem ajuste"}<small>${esc(S.init.cpu.codinome || "")}, ${S.init.cpu.nucleos} núcleos</small></p><ol class="etapas">${itens}</ol>`;
+  return `<h3>Seu processador</h3><p class="ganho">${c.estavel ? `Ajuste ${c.estavel}` : "Sem ajuste"}${sub}</p><ol class="etapas">${itens}</ol>`;
 }
 
 /* ---------------------------------------------------------------- desenho */
@@ -518,6 +593,7 @@ function desenharAssistente() {
     </div>`;
   if (tela.primario) $('[data-acao="p"]', alvo).onclick = (e) => { e.target.disabled = true; Promise.resolve(tela.primario[1]()).finally(() => { e.target.disabled = false; }); };
   (tela.links || []).forEach(([, fn], i) => { $(`[data-acao="${i}"]`, alvo).onclick = fn; });
+  ligarAvisoChip(alvo);
   $(".assistente-grade").classList.toggle("larga", !!tela.larga);
   if (S.teste && $("#ass-teste")) {
     if (S.teste.tipo === "memoria") desenharTesteAssistente($("#ass-teste"), S.teste);

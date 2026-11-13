@@ -277,11 +277,47 @@ def falhar_mem(e: dict, motivo: str) -> str:
 
 
 def pular_mem(e: dict) -> str:
-    t = e["mem"]["teste"]
-    e["mem"]["feitos"].append(t["passo"])
-    e["mem"]["teste"] = None
-    e["mem"]["mais_tensao"] = False
+    m = e["mem"]
+    t = m["teste"]
+    m["feitos"].append(t["passo"])
+    pulados = m.setdefault("pulados", [])
+    if t["passo"] not in pulados:
+        pulados.append(t["passo"])
+    m["teste"] = None
+    m["mais_tensao"] = False
     return f"Ajuste '{DESCR_ETAPA[t['passo']]}' pulado."
+
+
+def pulados_mem(m: dict) -> list[str]:
+    """Ajustes pulados que ainda não foram retomados (na ordem da busca)."""
+    p = set(m.get("pulados") or [])
+    return [x for x in ORDEM_MEM if x in p and x in m.get("feitos", [])]
+
+
+def inferir_pulados(m: dict) -> list[str]:
+    """Estados de antes da 2.3 não guardavam os pulos: um ajuste 'feito' cuja busca ainda tinha para onde
+    ir só pode ter sido pulado (quando o limite é encontrado, a busca se esgota)."""
+    r = []
+    for x in ORDEM_MEM:
+        b = (m.get("busca") or {}).get(x)
+        if x in m.get("feitos", []) and b and b.get("lista") and _proximo_indice(dict(b, repetir=None)) is not None:
+            r.append(x)
+    return r
+
+
+def retomar_pulados(m: dict, incluir_freq: bool = True) -> list[str]:
+    """Devolve os ajustes pulados à fila. Os que nunca foram testados recomeçam do zero (a lista de valores
+    é recalculada com os alvos e o estável de agora); os que já tinham tentativas continuam de onde pararam."""
+    voltar = [x for x in pulados_mem(m) if incluir_freq or x != "freq"]
+    for x in voltar:
+        m["feitos"] = [f for f in m["feitos"] if f != x]
+        b = m.get("busca", {}).get(x)
+        if b is not None and not b.get("tentativas"):
+            del m["busca"][x]
+        elif b is not None:
+            b["repetir"] = None
+    m["pulados"] = [x for x in (m.get("pulados") or []) if x not in voltar]
+    return voltar
 
 
 def economia(m: dict) -> dict:
@@ -295,7 +331,7 @@ def economia(m: dict) -> dict:
 
 
 def reiniciar_busca(m: dict) -> None:
-    m.update(feitos=[], mais_tensao=False, teste=None, busca={})
+    m.update(feitos=[], mais_tensao=False, teste=None, busca={}, pulados=[])
 
 # ---------------------------------------------------------------- processador
 def proximo_co(e: dict):
@@ -315,6 +351,8 @@ def preparar_cpu(e: dict):
 
 def passar_cpu(e: dict) -> str:
     c = e["cpu"]
+    if c["teste"].get("modo") == "nucleos":
+        return passar_nucleos(e)
     v = c["teste"]["valor"]
     c["estavel"] = v
     c["teste"] = None
@@ -323,6 +361,8 @@ def passar_cpu(e: dict) -> str:
 
 def falhar_cpu(e: dict, motivo: str) -> str:
     c = e["cpu"]
+    if c["teste"].get("modo") == "nucleos":
+        return falhar_nucleos(e, motivo)
     v = c["teste"]["valor"]
     c["teste"] = None
     c["feito"] = True
@@ -337,7 +377,7 @@ def observar_cpu(e: dict) -> str:
     t = e["cpu"]["teste"]
     t["situacao"] = "observando"
     t["desde_obs"] = agora_iso()
-    return (f"Curve Optimizer {t['valor']} passou no teste de núcleos. Agora é usar o PC normalmente: "
+    return (f"{descr_co(t)} passou no teste de núcleos. Agora é usar o PC normalmente: "
             f"sem travar por {HORAS_OBSERVACAO} h, ele é confirmado sozinho.")
 
 
@@ -349,8 +389,121 @@ def observacao_completa(e: dict, agora: dt.datetime | None = None) -> bool:
     return ((agora or dt.datetime.now()) - inicio).total_seconds() >= HORAS_OBSERVACAO * 3600
 
 
-def valor_co_no_boot(e: dict) -> int:
+def valor_co_no_boot(e: dict):
+    """Margem a aplicar: um número (todos os núcleos iguais) ou uma lista (um valor por núcleo)."""
     c = e["cpu"]
     if not c["perfil"].get("suporta_co"):
         return 0
-    return c["teste"]["valor"] if c["teste"] else c["estavel"]
+    t = c["teste"]
+    if t:
+        return list(t["valores"]) if t.get("modo") == "nucleos" else t["valor"]
+    if c.get("nucleos"):
+        v = list(c["nucleos"]["estavel"])
+        return v if any(v) else 0
+    return c["estavel"]
+
+
+def texto_valor(v) -> str:
+    return " ".join(str(x) for x in v) if isinstance(v, list) else str(v)
+
+
+def descr_co(t: dict) -> str:
+    """Texto curto do valor em teste: 'Curve Optimizer -15' ou 'Curve Optimizer por núcleo (-20 -25 ...)'."""
+    if t.get("modo") == "nucleos":
+        return "Curve Optimizer por núcleo (" + " ".join(str(v) for v in t["valores"]) + ")"
+    return f"Curve Optimizer {t['valor']}"
+
+
+# ---------------------------------------------------------------- processador, núcleo por núcleo
+# Depois que o valor igual para todos achou o limite, cada núcleo continua descendo sozinho: os núcleos
+# bons (que existem em todo processador) ganham margem extra, os fracos ficam onde estão.
+PASSO_NUCLEO = 5
+CO_MIN = -30
+
+
+def iniciar_nucleos(e: dict) -> None:
+    c = e["cpu"]
+    n = max(1, int(c["perfil"].get("nucleos") or 1))
+    c["nucleos"] = {"estavel": [c["estavel"]] * n, "limite": [c["estavel"] <= CO_MIN] * n, "feito": False}
+
+
+def proximo_vetor(e: dict):
+    """(valores, núcleos que mudam) da próxima rodada, ou None quando todos acharam o limite."""
+    nc = e["cpu"].get("nucleos")
+    if not nc:
+        return None
+    valores, mudados = list(nc["estavel"]), []
+    for i, v in enumerate(nc["estavel"]):
+        if not nc["limite"][i] and v - PASSO_NUCLEO >= CO_MIN:
+            valores[i] = v - PASSO_NUCLEO
+            mudados.append(i)
+    return (valores, mudados) if mudados else None
+
+
+def preparar_nucleos(e: dict):
+    c = e["cpu"]
+    if not c.get("nucleos"):
+        iniciar_nucleos(e)
+    prox = proximo_vetor(e)
+    if prox is None:
+        return None
+    valores, mudados = prox
+    c["teste"] = {"modo": "nucleos", "valores": valores, "mudados": mudados, "situacao": "pendente",
+                  "desde": agora_iso()}
+    return valores
+
+
+def resultado_teste_nucleos(e: dict, falhos: list[int]) -> str:
+    """O teste dos núcleos terminou. 'falhos' = índices dos núcleos que erraram. Os que erraram voltam ao
+    valor anterior e param ali; os outros seguem para a observação de 24 h com o valor novo."""
+    c = e["cpu"]
+    t, nc = c["teste"], c["nucleos"]
+    for i in falhos:
+        if 0 <= i < len(nc["limite"]):
+            nc["limite"][i] = True
+            t["valores"][i] = nc["estavel"][i]
+    t["mudados"] = [i for i in t["mudados"] if i not in falhos]
+    nomes = ", ".join(str(i + 1) for i in sorted(falhos))
+    if not t["mudados"]:
+        c["teste"] = None
+        if all(nc["limite"]) or proximo_vetor(e) is None:
+            nc["feito"] = True
+        return f"Nenhum núcleo aguentou o passo seguinte (falharam: {nomes}). Ficam os valores anteriores."
+    t["situacao"] = "observando"
+    t["desde_obs"] = agora_iso()
+    extra = f" Os núcleos {nomes} erraram e voltaram ao valor anterior." if falhos else ""
+    return f"{descr_co(t)} passou no teste de núcleos.{extra} Agora é só usar o PC: 24 h sem travar e ele é confirmado."
+
+
+def passar_nucleos(e: dict) -> str:
+    c = e["cpu"]
+    t, nc = c["teste"], c["nucleos"]
+    nc["estavel"] = list(t["valores"])
+    for i, v in enumerate(nc["estavel"]):
+        if v <= CO_MIN:
+            nc["limite"][i] = True
+    c["teste"] = None
+    if proximo_vetor(e) is None:
+        nc["feito"] = True
+    return f"PASSOU {descr_co(t)}. Novo estável."
+
+
+def falhar_nucleos(e: dict, motivo: str) -> str:
+    """Travou com o vetor em teste: não dá para saber qual núcleo foi, então todos os que mudaram nesta
+    rodada param no valor anterior (o lado seguro)."""
+    c = e["cpu"]
+    t, nc = c["teste"], c["nucleos"]
+    for i in t.get("mudados", []):
+        nc["limite"][i] = True
+    c["teste"] = None
+    if proximo_vetor(e) is None:
+        nc["feito"] = True
+    return (f"FALHOU {descr_co(t)}: {motivo}. Os núcleos que tinham mudado voltam ao valor anterior "
+            "e param ali.")
+
+
+def resumo_co(c: dict) -> str:
+    nc = c.get("nucleos")
+    if nc and any(v != c["estavel"] for v in nc["estavel"]):
+        return "por núcleo: " + " ".join(str(v) for v in nc["estavel"])
+    return str(c["estavel"])

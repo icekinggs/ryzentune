@@ -74,6 +74,8 @@ function irPara(p) {
   $("main").scrollTop = 0;
   if (p === "memoria" || p === "processador") lerTimings();
   if (p === "memoria" || p === "assistente") identificarChip();
+  if (p === "desempenho") abrirDesempenho();
+  if (p === "painel") lerTravamentos();
 }
 
 /* ---------------------------------------------------------------- abertura */
@@ -104,7 +106,7 @@ async function iniciar() {
   if (inicial && $(`#pagina-${inicial}`)) irPara(inicial);
   lerTimings();
   identificarChip();
-  laçoVivo();
+  laçoMonitor();
   laçoTeste();
   if (S.estado.config.verificar_atualizacao) verificarAtualizacao(false);
   const op = await api.memoria_opcoes_chip();
@@ -118,18 +120,6 @@ function aplicarAnimacoes() {
 }
 
 /* ---------------------------------------------------------------- ao vivo */
-async function laçoVivo() {
-  while (true) {
-    if (S.pagina === "painel" && !document.hidden) {
-      try {
-        const v = await api.ao_vivo();
-        if (v && !v.erro) { S.vivo = v; desenharVivo(); }
-      } catch (_) { /* segue */ }
-    }
-    await espera(1500);
-  }
-}
-
 function desenharVivo() {
   const v = S.vivo || {};
   const t = v.temp;
@@ -255,10 +245,13 @@ function desenharMemoria() {
 }
 
 /* ---------------------------------------------------------------- inteligência */
-let identificando = false;
+let identificando = false, chipLidoNestaSessao = false;
 async function identificarChip(forcar = false) {
-  if (identificando || (!forcar && S.estado.mem.chip)) return;
+  // lê os pentes uma vez por sessão mesmo com chip já salvo: assim a tela percebe se a escolha à mão
+  // discorda do que o SPD diz
+  if (identificando || (!forcar && chipLidoNestaSessao)) return;
   identificando = true;
+  chipLidoNestaSessao = true;
   $("#chip-nome").textContent = "Lendo os pentes…";
   await chamar("memoria_identificar");
   identificando = false;
@@ -564,7 +557,7 @@ function ligarEventos() {
     const r = await chamar("mem_usar_hardware", v);
     if (r) aviso("Ponto de partida salvo.", "ok");
   };
-  $("#mem-pular").onclick = () => chamar("mem_pular");
+  $("#mem-pular").onclick = () => pularComConfirmacao();
   $("#chip-ler").onclick = () => identificarChip(true);
   $("#chip-escolha").onchange = (e) => chamar("memoria_escolher_chip", e.target.value);
   $("#mem-medir").onclick = async (e) => {

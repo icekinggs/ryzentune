@@ -5,7 +5,7 @@
   RyzenTune.exe --instalar-tarefa / --remover-tarefa      usados pelo instalador
   RyzenTune.exe --diagnostico <arquivo>  lê o hardware e grava um relatório JSON
   RyzenTune.exe --autoteste              usado pelo build
-  (internos) --teste-memoria MB MIN / --teste-nucleo CPU SEG REF
+  (internos) --teste-memoria MB MIN / --teste-nucleo CPU SEG REF / --bench-memoria / --bench-cpu SEG
 """
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ class _IO:
         try:
             from .zen import Zen
             with Zen() as z:
-                z.aplicar_co_todos(valor)
+                z.aplicar_co(valor)
                 lido = z.ler_co()
             sistema.log.info("Curve Optimizer %s aplicado; leitura por núcleo: %s", valor, lido)
             return True
@@ -65,11 +65,12 @@ def _autoteste(log) -> int:
         import numpy  # noqa: F401
         import webview  # noqa: F401
 
-        from . import api, boot, conhecimento, estado, hardware, motor, spd, testes, zen  # noqa: F401
+        from . import api, bench, boot, conhecimento, estado, hardware, monitor, motor, spd, testes, zen  # noqa: F401
         assert motor.validar_perfil(motor.PADRAO_MEM) == []
         assert hardware.classificar_cpu("AMD Ryzen 7 5700X3D 8-Core Processor", 8).suporta_co
         assert testes.carga_referencia() == testes.carga_referencia()
-        for arq in ("index.html", "estilo.css", "app.js", "assistente.js"):
+        assert bench.latencia_ns(16, passos=200_000, repeticoes=1) > 0  # o laço em código de máquina roda
+        for arq in ("index.html", "estilo.css", "app.js", "assistente.js", "painel.js"):
             assert os.path.isfile(os.path.join(_pasta_web(), arq)), arq
         for arq in ("AMDFamily17.bin", "RyzenSMU.bin", "SmbusPIIX4.bin"):
             from .pawnio import pasta_recursos
@@ -139,6 +140,12 @@ def main(argv=None) -> int:
     if argv[:1] == ["--teste-referencia"]:
         from .testes import trabalhador_referencia
         return trabalhador_referencia()
+    if argv[:1] == ["--bench-memoria"]:
+        from .bench import trabalhador_memoria
+        return trabalhador_memoria()
+    if argv[:1] == ["--bench-cpu"]:
+        from .bench import trabalhador_cpu
+        return trabalhador_cpu(float(argv[1]))
     if argv[:1] == ["--teste-nucleo"]:
         from .testes import trabalhador_nucleo
         return trabalhador_nucleo(int(argv[1]), float(argv[2]), argv[3])

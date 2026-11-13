@@ -30,11 +30,15 @@ def novo() -> dict:
         "versao_estado": VERSAO_ESTADO,
         "mem": {"estavel": dict(motor.PADRAO_MEM), "confirmado": False, "teste": None,
                 "feitos": [], "mais_tensao": False, "busca": {}, "reinicios": 0,
-                "chip": None, "alvos": None, "medicoes": []},
-        "cpu": {"estavel": 0, "teste": None, "feito": False, "perfil": {}},
+                "chip": None, "alvos": None, "medicoes": [], "pulados": [], "chip_spd": None},
+        "cpu": {"estavel": 0, "teste": None, "feito": False, "perfil": {}, "nucleos": None},
+        "bench": [],
         "config": {"verificar_atualizacao": True, "versao_ignorada": "", "animacoes": True},
         "historico": [],
     }
+
+
+OPACOS = ("estavel", "perfil", "teste", "busca", "alvos", "chip", "chip_spd", "nucleos")
 
 
 def _mesclar(base: dict, lido: dict) -> dict:
@@ -42,7 +46,7 @@ def _mesclar(base: dict, lido: dict) -> dict:
     for k, v in base.items():
         if k not in lido or (isinstance(v, dict) and not isinstance(lido[k], dict)):
             lido[k] = copy.deepcopy(v)
-        elif isinstance(v, dict) and k not in ("estavel", "perfil", "teste", "busca", "alvos", "chip"):
+        elif isinstance(v, dict) and k not in OPACOS:
             _mesclar(v, lido[k])
     return lido
 
@@ -52,9 +56,12 @@ def _ler(caminho: str):
         dados = json.load(f)
     if not isinstance(dados, dict):
         raise ValueError("estado inválido")
+    sem_pulados = isinstance(dados.get("mem"), dict) and "pulados" not in dados["mem"]
     e = _mesclar(novo(), dados)
     for k, v in motor.PADRAO_MEM.items():
         e["mem"]["estavel"].setdefault(k, v)
+    if sem_pulados:  # 2.3: os pulos passaram a ser guardados
+        e["mem"]["pulados"] = motor.inferir_pulados(e["mem"])
     return e
 
 

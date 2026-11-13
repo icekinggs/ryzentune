@@ -10,7 +10,7 @@ import os
 import threading
 import traceback
 
-from . import atualizador, conhecimento, estado, hardware, motor, sistema, testes
+from . import atualizador, bench, conhecimento, estado, hardware, motor, sistema, testes
 from .versao import NOME, REPO, __version__
 
 log = sistema.log
@@ -66,6 +66,9 @@ class Api:
         self._teste = None
         self._info_atualizacao = None
         self._download = {"estado": "parado", "fracao": 0}
+        self._monitor = None
+        self._bench = {"rodando": False}
+        self._mapa_nucleos: dict[int, int] = {}
 
     # ------------------------------------------------------------ hardware
     def _abrir_zen(self):
@@ -93,7 +96,7 @@ class Api:
             if antigo.get("nome") and antigo["nome"] != perfil.nome:
                 estado.registrar(e, "CPU", f"Processador trocado ({antigo['nome']} → {perfil.nome}). "
                                            "Curve Optimizer zerado.", log)
-                e["cpu"].update(estavel=0, teste=None, feito=False)
+                e["cpu"].update(estavel=0, teste=None, feito=False, nucleos=None)
             d = perfil.to_dict()
             d["suporta_co"] = bool(z and z.suporta_co())
             d["codinome"] = codinome
@@ -102,6 +105,10 @@ class Api:
             self._confirmar_cpu_se_pronto(e)
         with estado.transacao() as e:
             aplicar(e)
+        if self._monitor is None:
+            from .monitor import Monitor
+            self._monitor = Monitor(self._abrir_zen, perfil.nucleos)
+            self._monitor.iniciar()
         inicio = (dt.datetime.now() - dt.timedelta(days=14)).replace(microsecond=0).isoformat()
         k41, whea = sistema.eventos_desde(inicio)
         return {"hw": self._hw, "cpu": perfil.to_dict() | {"codinome": codinome}, "placa": fab,
@@ -126,6 +133,16 @@ class Api:
         except Exception as ex:
             r["pm_erro"] = str(ex)
         return r
+
+    @_seguro
+    def monitor_desde(self, n=0):
+        if not self._monitor:
+            return {"amostras": [], "picos": {}}
+        return self._monitor.desde(int(n or 0))
+
+    @_seguro
+    def travamentos(self, dias=30):
+        return {"eventos": sistema.eventos_lista(int(dias))}
 
     @_seguro
     def ler_timings(self):
@@ -286,6 +303,25 @@ class Api:
         return self._acao(lambda e: self._reg(e, "Memória", motor.pular_mem(e)))
 
     @_seguro
+    def mem_aceitar_pulados(self):
+        def f(e):
+            e["mem"]["pulados"] = []
+            self._reg(e, "Memória", "Ajustes pulados mantidos como estão.")
+        return self._acao(f)
+
+    @_seguro
+    def mem_retomar_pulados(self, incluir_freq=True):
+        def f(e):
+            if e["mem"]["teste"]:
+                raise RuntimeError("Termine ou cancele a etapa aberta primeiro.")
+            voltaram = motor.retomar_pulados(e["mem"], bool(incluir_freq))
+            if voltaram:
+                self._reg(e, "Memória", "Ajustes pulados de volta à fila: "
+                                        + ", ".join(motor.DESCR_ETAPA[x] for x in voltaram) + ".")
+            return voltaram
+        return self._acao(f)
+
+    @_seguro
     def mem_cancelar(self):
         def f(e):
             e["mem"]["teste"] = None
@@ -342,8 +378,13 @@ class Api:
                                          "jedec_cl")} for p in pentes]
 
         def f(e):
-            if (e["mem"].get("chip") or {}).get("manual"):
-                return  # o usuário escolheu à mão: não sobrescreve
+            if pentes:
+                e["mem"]["chip_spd"] = dict(chip, pentes=resumo)
+            atual = e["mem"].get("chip") or {}
+            if atual.get("manual"):
+                if pentes:
+                    atual["pentes"] = resumo
+                return  # o usuário escolheu à mão: não sobrescreve (a tela avisa se os pentes discordarem)
             self._aplicar_chip(e, chip, resumo)
             self._reg(e, "Memória", f"Chip identificado: {chip['nome']} (confiança {chip['confianca']}).")
         return self._acao(f)
@@ -362,22 +403,100 @@ class Api:
         return self._acao(f)
 
     @_seguro
+    def memoria_usar_spd(self):
+        """Volta a usar o chip que o SPD dos pentes indica (desfaz a escolha à mão)."""
+        def f(e):
+            spd_chip = e["mem"].get("chip_spd")
+            if not spd_chip:
+                raise RuntimeError("Os pentes ainda não foram lidos.")
+            chip = {k: v for k, v in spd_chip.items() if k != "pentes"}
+            self._aplicar_chip(e, chip, spd_chip.get("pentes", []))
+            # alvos novos: os ajustes que ainda não foram testados recalculam a lista de valores
+            for passo, b in list(e["mem"].get("busca", {}).items()):
+                if not b.get("tentativas") and passo not in e["mem"]["feitos"]:
+                    del e["mem"]["busca"][passo]
+            self._reg(e, "Memória", f"Chip conforme os pentes: {chip['nome']}.")
+        return self._acao(f)
+
+    @_seguro
     def memoria_opcoes_chip(self):
         return {"opcoes": conhecimento.OPCOES}
 
     @_seguro
-    def memoria_medir(self):
-        """Mede a banda e guarda junto com a latência do perfil estável atual."""
-        gbps = testes.medir_banda()
+    def memoria_medir(self, rotulo=""):
+        """Mede a memória (latência real e banda) e guarda junto com o perfil estável atual."""
+        r = bench.medir(False)
 
         def f(e):
             p = e["mem"]["estavel"]
             med = {"quando": motor.agora_iso(), "freq": p["freq"], "tCL": p["tCL"], "tRCDRD": p["tRCDRD"],
-                   "tRFC": p["tRFC"], "gbps": gbps, "lat_cas_ns": round(p["tCL"] * 2000 / p["freq"], 2),
-                   "trfc_ns": round(motor.ns_trfc(p))}
+                   "tRFC": p["tRFC"], "gbps": r["copia"], "lat_ns": r["lat_ns"],
+                   "lat_cas_ns": round(p["tCL"] * 2000 / p["freq"], 2), "trfc_ns": round(motor.ns_trfc(p))}
             e["mem"].setdefault("medicoes", []).append(med)
             del e["mem"]["medicoes"][:-40]
+            self._guardar_bench(e, r, rotulo or "Memória medida")
             return med
+        return self._acao(f)
+
+    # ------------------------------------------------------------ desempenho (antes e depois)
+    def _retrato(self, e) -> dict:
+        """O que está valendo agora: memória (lida do hardware quando dá) e Curve Optimizer."""
+        p = dict(e["mem"]["estavel"])
+        try:
+            z = self._abrir_zen()
+            if z:
+                t = z.timings()
+                p.update({k: t[k] for k in ("tCL", "tRCDRD", "tRP", "tRAS", "tRFC") if k in t})
+                p["freq"] = t.get("mts_ratio") or p["freq"]
+        except Exception:
+            pass
+        co = motor.valor_co_no_boot(e)
+        return {"mem": f"{p['freq']} CL{p['tCL']}-{p['tRCDRD']}-{p['tRP']}-{p['tRAS']}",
+                "trfc_ns": round(motor.ns_trfc(p)), "co": motor.texto_valor(co) if co else "0"}
+
+    def _guardar_bench(self, e, r: dict, rotulo: str) -> dict:
+        item = {"quando": motor.agora_iso(), "rotulo": rotulo, **self._retrato(e), **r}
+        lista = e.setdefault("bench", [])
+        lista.append(item)
+        del lista[1:-59]  # guarda a primeira (a referência de antes de tudo) e as 59 últimas
+        return item
+
+    @_seguro
+    def bench_iniciar(self, completo=True, rotulo=""):
+        if self._bench.get("rodando"):
+            return {"erro": "Já há uma medição rodando."}
+        if self._teste and self._teste.obter().get("rodando"):
+            return {"erro": "Espere o teste de estabilidade terminar."}
+        self._bench = {"rodando": True, "etapa": "preparando", "fracao": 0}
+
+        def progresso(etapa, fracao):
+            self._bench.update(etapa=etapa, fracao=fracao)
+
+        def rodar():
+            try:
+                r = bench.medir(bool(completo), progresso)
+                with estado.transacao() as e:
+                    item = self._guardar_bench(e, r, rotulo or "Medição manual")
+                self._bench = {"rodando": False, "fracao": 1, "resultado": item}
+                log.info("medição de desempenho: %s", r)
+            except Exception as ex:
+                log.error("medição falhou:\n%s", traceback.format_exc())
+                self._bench = {"rodando": False, "erro": str(ex)}
+        threading.Thread(target=rodar, daemon=True).start()
+        return {"ok": True}
+
+    @_seguro
+    def bench_status(self):
+        return dict(self._bench)
+
+    @_seguro
+    def bench_retrato(self):
+        return self._retrato(estado.carregar())
+
+    @_seguro
+    def bench_apagar(self, quando):
+        def f(e):
+            e["bench"] = [b for b in e.get("bench", []) if b["quando"] != quando]
         return self._acao(f)
 
     # ------------------------------------------------------------ processador
@@ -397,6 +516,69 @@ class Api:
             if v is not None:
                 self._reg(e, "CPU", f"Curve Optimizer {v} preparado para o próximo boot.")
             return v
+        return self._acao(f)
+
+    @_seguro
+    def cpu_refinar_nucleos(self):
+        """Próxima rodada núcleo por núcleo. Aplica na hora, sem reiniciar: se travar, o reinício já volta
+        ao último valor bom (a tarefa de boot vê o desligamento e reprova a rodada)."""
+        if not sistema.tarefa_ok():
+            ok, msg = sistema.criar_tarefa()
+            if not ok:
+                return {"erro": f"Não consegui criar a tarefa de boot: {msg}"}
+
+        def f(e):
+            c = e["cpu"]
+            if not c["perfil"].get("suporta_co"):
+                raise RuntimeError("Este processador não tem Curve Optimizer acessível.")
+            if e["mem"]["teste"]:
+                raise RuntimeError("Há uma etapa de memória em andamento. Teste uma coisa de cada vez.")
+            if c["teste"]:
+                raise RuntimeError("Já há um teste do processador em andamento.")
+            if not c["feito"]:
+                raise RuntimeError("Primeiro termine o ajuste igual para todos os núcleos.")
+            v = motor.preparar_nucleos(e)
+            if v is not None:
+                self._reg(e, "CPU", f"{motor.descr_co(c['teste'])} preparado.")
+            return v
+        r = self._acao(f)
+        if r["resultado"] is not None:
+            r = self.cpu_aplicar_agora()
+        return r
+
+    @_seguro
+    def cpu_parar_nucleos(self):
+        """Encerra a fase núcleo por núcleo com os valores de hoje."""
+        def f(e):
+            c = e["cpu"]
+            if not c.get("nucleos"):
+                motor.iniciar_nucleos(e)
+            c["nucleos"]["feito"] = True
+            self._reg(e, "CPU", f"Curve Optimizer mantido em {motor.resumo_co(c)}.")
+        return self._acao(f)
+
+    @_seguro
+    def cpu_aplicar_agora(self):
+        """Aplica o valor em teste já, sem reiniciar (só para a rodada núcleo por núcleo)."""
+        t = estado.carregar()["cpu"]["teste"]
+        if not t or t.get("modo") != "nucleos":
+            return {"erro": "Nada para aplicar agora."}
+        z = self._abrir_zen()
+        if not z:
+            return {"erro": f"Sem acesso ao hardware: {self._zen_erro}"}
+        try:
+            z.aplicar_co(list(t["valores"]))
+        except Exception as ex:
+            log.error("aplicar CO por núcleo:\n%s", traceback.format_exc())
+            return {"erro": f"O processador não aceitou agora ({ex}). Reinicie: o valor entra no próximo boot."}
+
+        def f(e):
+            tt = e["cpu"]["teste"]
+            if tt and tt["situacao"] in ("pendente", "observando"):
+                if tt["situacao"] == "pendente":
+                    tt["situacao"] = "ativo"
+                    tt["desde"] = motor.agora_iso()
+                self._reg(e, "CPU", f"{motor.descr_co(tt)} aplicado agora, sem reiniciar.")
         return self._acao(f)
 
     def _confirmar_cpu_se_pronto(self, e):
@@ -439,13 +621,20 @@ class Api:
     @_seguro
     def cpu_zerar(self):
         def f(e):
-            e["cpu"].update(estavel=0, teste=None, feito=False)
+            e["cpu"].update(estavel=0, teste=None, feito=False, nucleos=None)
             self._reg(e, "CPU", "Curve Optimizer zerado. Vale a partir do próximo boot.")
         return self._acao(f)
 
     @_seguro
     def cpu_recomecar(self):
-        return self._acao(lambda e: e["cpu"].__setitem__("feito", False))
+        def f(e):
+            c = e["cpu"]
+            if c.get("nucleos"):  # recomeça só a parte núcleo por núcleo
+                c["nucleos"]["limite"] = [v <= motor.CO_MIN for v in c["nucleos"]["estavel"]]
+                c["nucleos"]["feito"] = False
+            else:
+                c["feito"] = False
+        return self._acao(f)
 
     # ------------------------------------------------------------ testes embutidos
     @_seguro
@@ -464,6 +653,12 @@ class Api:
         if self._teste and self._teste.obter().get("rodando"):
             return {"erro": "Já há um teste rodando."}
         cpus = testes.cpus_por_nucleo()
+        t = estado.carregar()["cpu"]["teste"]
+        if t and t.get("modo") == "nucleos" and t.get("situacao") == "ativo":
+            cpus = [cpus[i] for i in t["mudados"] if i < len(cpus)]
+            self._mapa_nucleos = {cpu: i for cpu, i in zip(cpus, t["mudados"], strict=False)}
+        else:
+            self._mapa_nucleos = {}
         self._teste = testes.TesteNucleos()
         self._teste.iniciar(cpus, float(segundos_por_nucleo), self._fim_teste)
         log.info("teste de núcleos: %s, %ss cada", cpus, segundos_por_nucleo)
@@ -481,7 +676,16 @@ class Api:
             if s["tipo"] == "memoria" and e["mem"]["teste"] and e["mem"]["teste"]["situacao"] == "testar":
                 r = self.mem_resultado(passou, motivo)
                 if r.get("resultado") == "passou":
-                    self.memoria_medir()  # registra a banda do novo perfil estável
+                    passo = (e["mem"]["teste"] or {}).get("passo")
+                    self.memoria_medir(f"Depois de: {motor.DESCR_ETAPA.get(passo, 'memória')}")
+            elif s["tipo"] == "nucleos" and self._mapa_nucleos and e["cpu"]["teste"] \
+                    and e["cpu"]["teste"]["situacao"] == "ativo" and e["cpu"]["teste"].get("modo") == "nucleos" \
+                    and (passou or any(v == "erro" for v in (s.get("nucleos") or {}).values())):
+                falhos = [self._mapa_nucleos[int(c)] for c, v in (s.get("nucleos") or {}).items()
+                          if v == "erro" and int(c) in self._mapa_nucleos]
+                r = self._acao(lambda e: self._reg(e, "CPU", motor.resultado_teste_nucleos(e, falhos)))
+                if falhos and r["estado"]["cpu"]["teste"]:
+                    self.cpu_aplicar_agora()  # os que erraram voltam ao valor anterior já
             elif s["tipo"] == "nucleos" and e["cpu"]["teste"] and e["cpu"]["teste"]["situacao"] == "ativo":
                 if passou:
                     self._acao(lambda e: self._reg(e, "CPU", motor.observar_cpu(e)))

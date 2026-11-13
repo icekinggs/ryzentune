@@ -51,14 +51,14 @@ def rotina(io) -> int | None:
         if nome and c["perfil"].get("nome") and nome != c["perfil"]["nome"]:
             estado.registrar(e, "CPU", f"Processador trocado ({c['perfil']['nome']} → {nome}). "
                                        "Curve Optimizer zerado; abra o RyzenTune.", log)
-            c.update(estavel=0, teste=None, feito=False, perfil={})
+            c.update(estavel=0, teste=None, feito=False, perfil={}, nucleos=None)
             return None
         ct = c["teste"]
         if ct:
             if ct["situacao"] == "pendente":
                 ct["situacao"] = "ativo"
                 ct["desde"] = motor.agora_iso()
-                estado.registrar(e, "CPU", f"Curve Optimizer {ct['valor']} ativado neste boot.", log)
+                estado.registrar(e, "CPU", f"{motor.descr_co(ct)} ativado neste boot.", log)
             elif ct["situacao"] in ("ativo", "observando"):
                 k41, whea = io.eventos_desde(ct["desde"])
                 if k41 > 0 or whea > 0:
@@ -70,8 +70,8 @@ def rotina(io) -> int | None:
         ok = io.aplicar_co(valor)
         if not ok:
             with estado.transacao() as e:
-                estado.registrar(e, "CPU", f"Não consegui aplicar o Curve Optimizer {valor} neste boot "
-                                           "(veja o log).", log)
+                estado.registrar(e, "CPU", f"Não consegui aplicar o Curve Optimizer {motor.texto_valor(valor)} "
+                                           "neste boot (veja o log).", log)
             return None
         return valor
     return None

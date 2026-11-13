@@ -45,6 +45,7 @@
     </div>
     <button class="nav ativo" data-pagina="assistente"><svg viewBox="0 0 24 24"><path d="M12 3l2.5 5.5L20 9l-4 4 1 6-5-3-5 3 1-6-4-4 5.5-.5z"/></svg>Assistente</button>
     <button class="nav" data-pagina="painel"><svg viewBox="0 0 24 24"><path d="M4 13a8 8 0 0 1 16 0"/><path d="M12 13l4-4"/><path d="M4 18h16"/></svg>Sensores</button>
+    <button class="nav" data-pagina="desempenho"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Desempenho</button>
     <button class="nav" data-pagina="historico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Histórico</button>
     <p class="rotulo-avancado so-avancado">Avançado</p>
     <button class="nav so-avancado" data-pagina="memoria"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="10" rx="1"/><path d="M7 7v10M11 7v10M15 7v10M3 20h18M6 17v3M18 17v3"/></svg>Memória</button>
@@ -99,9 +100,26 @@
           <div class="leitura"><span class="valor" id="v-fclk">--</span><span class="unidade">MHz</span><p>FCLK</p></div>
           <div class="leitura"><span class="valor" id="v-uclk">--</span><span class="unidade">MHz</span><p>UCLK</p></div>
           <div class="leitura"><span class="valor" id="v-vsoc">--</span><span class="unidade">V</span><p>SoC</p></div>
+          <div class="leitura"><span class="valor" id="v-vcore">--</span><span class="unidade">V</span><p>Núcleos</p></div>
           <div class="sinal-vivo" aria-hidden="true"><svg viewBox="0 0 300 40" preserveAspectRatio="none"><polyline id="traco" points=""/></svg></div>
         </div>
       </div>
+
+      <div class="sensores-grade">
+        <article class="bloco">
+          <h3>Núcleos agora</h3>
+          <p class="nota picos" id="picos"></p>
+          <ol class="nucleos-vivo" id="nucleos-vivo"><li class="vazio">Lendo os núcleos…</li></ol>
+        </article>
+        <article class="bloco">
+          <div class="bloco-topo"><h3>Últimos 15 minutos</h3><span class="nota">passe o mouse para ver cada momento</span></div>
+          <div class="graficos" id="graficos"></div>
+        </article>
+      </div>
+      <article class="bloco">
+        <div class="bloco-topo"><h3>Travamentos nos últimos 30 dias</h3><button class="botao fantasma pequeno" id="trav-ler">Ler de novo</button></div>
+        <div id="travamentos"><p class="vazio">Lendo o registro do Windows…</p></div>
+      </article>
 
       <div class="colunas">
         <article class="bloco">
@@ -255,6 +273,42 @@
       <article class="bloco" id="painel-teste" hidden></article>
     </section>
 
+    <!-- ===== Desempenho ===== -->
+    <section class="pagina" id="pagina-desempenho">
+      <header class="cabeca">
+        <h2>Desempenho</h2>
+        <p class="sub">Quanto cada ajuste rendeu: a mesma medição, antes e depois.</p>
+      </header>
+      <article class="bloco medir-bloco">
+        <div class="medir-topo">
+          <div>
+            <p class="medir-titulo" id="bench-titulo">Medir o desempenho agora</p>
+            <p class="nota" id="bench-retrato"></p>
+          </div>
+          <button class="botao primario" id="bench-medir">Medir agora</button>
+        </div>
+        <div class="medir-progresso" id="bench-progresso" hidden>
+          <div class="barra-tempo"><i id="bench-barra"></i></div>
+          <p class="nota" id="bench-etapa"></p>
+        </div>
+        <p class="nota">Leva uns 45 segundos e usa o processador e a memória ao máximo. Feche jogos e programas pesados antes: qualquer coisa aberta muda o resultado.</p>
+      </article>
+      <article class="bloco">
+        <div class="bloco-topo">
+          <h3>Comparação</h3>
+          <div class="comparar-escolha">
+            <label>Antes <select id="bench-a"></select></label>
+            <label>Depois <select id="bench-b"></select></label>
+          </div>
+        </div>
+        <div id="bench-comparacao"></div>
+      </article>
+      <article class="bloco">
+        <h3>Todas as medições</h3>
+        <div class="tabela-rolagem"><table class="tabela-bench" id="bench-tabela"></table></div>
+      </article>
+    </section>
+
     <!-- ===== Histórico ===== -->
     <section class="pagina" id="pagina-historico">
       <header class="cabeca"><h2>Histórico</h2><p class="sub">Tudo o que foi preparado, aplicado e testado.</p></header>
@@ -304,5 +358,6 @@
 
 <script src="app.js"></script>
 <script src="assistente.js"></script>
+<script src="painel.js"></script>
 </body>
 </html>

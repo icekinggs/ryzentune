@@ -190,15 +190,15 @@ input[type=number] { width: 96px; font-family: var(--fonte-instr); font-variant-
   font-variant-numeric: tabular-nums; }
 .leitura-grande small { font-size: 20px; color: var(--texto-2); margin-left: 2px; }
 .rotulo { margin: 4px 0 0; color: var(--texto-3); font-size: 13px; }
-.leituras { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); align-content: center;
-  padding: 22px 24px 46px; background: var(--superficie); border: 1px solid var(--traco); border-radius: var(--raio-2);
+.leituras { position: relative; display: grid; grid-template-columns: repeat(5, 1fr); align-content: center;
+  padding: 22px 24px; background: var(--superficie); border: 1px solid var(--traco); border-radius: var(--raio-2);
   overflow: hidden; }
 .leitura { padding: 0 6px; border-left: 1px solid var(--traco); }
 .leitura:first-child { border-left: 0; }
 .leitura .valor { font: 600 36px/1.1 var(--fonte-instr); font-variant-numeric: tabular-nums; color: var(--sinal); }
 .leitura .unidade { margin-left: 4px; color: var(--texto-3); font-size: 14px; }
 .leitura p { margin: 2px 0 0; color: var(--texto-2); }
-.sinal-vivo { position: absolute; left: 0; right: 0; bottom: 0; height: 40px; opacity: .55; }
+.sinal-vivo { display: none; position: absolute; left: 0; right: 0; bottom: 0; height: 40px; opacity: .55; }
 .sinal-vivo svg { width: 100%; height: 100%; }
 .sinal-vivo polyline { fill: none; stroke: var(--sinal); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 
@@ -544,3 +544,91 @@ dialog p { margin: 0; color: var(--texto-2); white-space: pre-line; }
   .colunas { grid-template-columns: 1fr 1fr; }
   .instrumento { grid-template-columns: 1fr; }
 }
+
+/* ================= 2.3 ================= */
+/* assistente: chip, pulados, Curve Optimizer por núcleo */
+.aviso-chip { display: grid; gap: 4px; margin: 0 0 16px; padding: 12px 16px; border: 1px solid #5A4520;
+  background: #241E12; border-radius: var(--raio-2); }
+.aviso-chip p { margin: 0; color: #FFE2B5; }
+.aviso-chip .link { justify-self: start; color: var(--acao); }
+.lista-pulados, .lista-co { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px;
+  margin: 12px 0; padding: 0; list-style: none; }
+.lista-pulados li, .lista-co li { display: flex; justify-content: space-between; gap: 8px; padding: 9px 12px;
+  background: var(--placa); border: 1px solid var(--traco); border-radius: var(--raio-1); }
+.lista-pulados span, .lista-co span { color: var(--texto-2); font-size: 13.5px; }
+.lista-pulados b, .lista-co b { font: 600 15px var(--fonte-instr); font-variant-numeric: tabular-nums; }
+.lista-co li.muda { border-color: #5A4520; }
+.lista-co li.muda b { color: var(--acao); }
+.etapas li.pulado { color: var(--texto-3); }
+.etapas li.pulado i { background: var(--superficie-2); border-color: var(--texto-3); color: var(--texto-2); font-size: 11px; }
+.etapas li.pulado b { color: var(--texto-3); font: italic 500 12.5px var(--fonte); }
+
+/* sensores */
+.sensores-grade { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 16px; margin-bottom: 16px; }
+.sensores-grade .bloco { margin: 0; }
+.nucleos-vivo { display: grid; gap: 8px; margin: 4px 0 0; padding: 0; list-style: none; }
+.nucleos-vivo li { display: grid; grid-template-columns: 70px 1fr 88px 50px; grid-template-rows: auto auto;
+  align-items: center; column-gap: 12px; row-gap: 3px; }
+.nucleos-vivo li.vazio { display: block; color: var(--texto-3); }
+.nucleos-vivo .nome { grid-row: span 2; color: var(--texto-2); font-size: 13.5px; }
+.barra-mhz { height: 10px; border-radius: 5px; background: var(--placa); overflow: hidden; }
+.barra-mhz i { display: block; height: 100%; border-radius: 0 4px 4px 0; background: var(--sinal);
+  transition: width calc(.6s * var(--anim)) ease; }
+.nucleos-vivo .mhz { grid-row: span 2; font: 600 15px var(--fonte-instr); font-variant-numeric: tabular-nums; text-align: right; }
+.nucleos-vivo .co { grid-row: span 2; color: var(--texto-3); font: 500 12px var(--fonte-instr); text-align: right; }
+.nucleos-vivo .uso { grid-column: 2; grid-row: 2; display: flex; align-items: center; gap: 8px; }
+.nucleos-vivo .uso i { display: block; height: 3px; width: 0; max-width: 60%; border-radius: 2px; background: var(--texto-3);
+  transition: width calc(.6s * var(--anim)) ease; }
+.nucleos-vivo .uso small { color: var(--texto-3); font-size: 11.5px; white-space: nowrap; }
+.graficos { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px; }
+.grafico { margin: 0; min-width: 0; }
+.grafico figcaption { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+.grafico figcaption span { color: var(--texto-2); font-size: 13px; }
+.grafico figcaption b { font: 600 16px var(--fonte-instr); font-variant-numeric: tabular-nums; }
+.grafico .plot { position: relative; height: 90px; cursor: crosshair; }
+.grafico svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.grafico .base { stroke: var(--traco); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.grafico .linha { fill: none; stroke: var(--sinal); stroke-width: 2; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.grafico .area { fill: var(--sinal); opacity: .08; }
+.grafico .cruz { stroke: var(--texto-3); stroke-width: 1; vector-effect: non-scaling-stroke; stroke-dasharray: 3 3; }
+.grafico .ponto { fill: var(--sinal); stroke: var(--superficie); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.dica-grafico { position: absolute; top: -6px; transform: translateX(8px); display: grid; padding: 4px 8px;
+  background: var(--superficie-2); border: 1px solid var(--traco); border-radius: var(--raio-1); pointer-events: none;
+  white-space: nowrap; }
+.dica-grafico b { font: 600 14px var(--fonte-instr); }
+.dica-grafico span { color: var(--texto-3); font-size: 11.5px; }
+.eixo-x { display: flex; justify-content: space-between; color: var(--texto-3); font-size: 11px; margin-top: 2px; }
+.trav-ok { display: flex; align-items: center; gap: 10px; margin: 0; color: var(--texto-2); }
+.trav-ok span { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%;
+  background: #12251B; border: 1px solid var(--ok); color: var(--ok); }
+.trav-lista { display: grid; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+.trav-lista li { display: grid; grid-template-columns: 120px 1fr; gap: 12px; padding: 7px 12px;
+  background: var(--placa); border-radius: var(--raio-1); border-left: 3px solid var(--acao); }
+.trav-lista li.whea { border-left-color: var(--erro); }
+.trav-lista span { color: var(--texto-3); font-variant-numeric: tabular-nums; }
+.trav-lista b { font-weight: 500; color: var(--texto-2); }
+
+/* desempenho */
+.medir-topo { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.medir-titulo { margin: 0; font: 600 20px var(--fonte-instr); }
+.medir-progresso { margin-top: 14px; }
+.medir-progresso .barra-tempo i { transition: width calc(.6s * var(--anim)) ease; }
+.comparar-escolha { display: flex; gap: 12px; flex-wrap: wrap; }
+.comparar-escolha label { display: flex; align-items: center; gap: 6px; color: var(--texto-3); font-size: 13px; }
+.comparar-escolha select { max-width: 260px; padding: 4px 8px; background: var(--placa); border: 1px solid var(--traco);
+  border-radius: var(--raio-1); }
+.cfg-ab { display: grid; gap: 4px; margin: 0 0 12px; }
+.cfg-ab p { margin: 0; color: var(--texto-2); font-size: 13.5px; }
+.cfg-ab span { display: inline-block; width: 64px; color: var(--texto-3); }
+.tabela-rolagem { overflow-x: auto; }
+.tabela-bench { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tabela-bench th { text-align: left; color: var(--texto-3); font-weight: 500; padding: 6px 8px; border-bottom: 1px solid var(--traco);
+  white-space: nowrap; vertical-align: bottom; }
+.tabela-bench th small { display: block; font-size: 11px; }
+.tabela-bench td { padding: 7px 8px; border-bottom: 1px solid var(--traco); color: var(--texto-2); white-space: nowrap; }
+.tabela-bench .n { text-align: right; font-variant-numeric: tabular-nums; }
+.tabela-bench td.n { color: var(--texto); font-family: var(--fonte-instr); }
+@media (max-width: 1100px) {
+  .sensores-grade { grid-template-columns: 1fr; }
+}
+.picos { margin: -6px 0 12px; }
