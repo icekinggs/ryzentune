@@ -1,6 +1,6 @@
 """Versão do RyzenTune. Mude aqui antes de criar uma tag vX.Y.Z."""
 
-__version__ = "2.3.0"
+__version__ = "2.3.1"
 
 NOME = "RyzenTune"
 # dono/repositório no GitHub (usado pela atualização automática)
