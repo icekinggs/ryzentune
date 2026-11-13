@@ -171,7 +171,9 @@ function desenharTesteAssistente(alvo, s) {
   q("ciclo").textContent = s.ciclo ? `Volta ${s.ciclo} pela memória` : "";
   q("gb").textContent = s.mb ? (s.mb / 1024).toFixed(1).replace(".", ",") : "--";
   q("padrao").textContent = s.padrao ? `Padrão ${s.padrao}` : "";
-  q("aviso").textContent = erros
+  const salvando = !s.rodando && s.registrado === false;
+  q("aviso").textContent = salvando ? "Teste terminado. Salvando o resultado e medindo a velocidade, leva alguns segundos…"
+    : erros
     ? `Encontrou ${erros} ${erros === 1 ? "erro" : "erros"}. Este valor não é estável: o RyzenTune volta para o último que passou e tenta um intermediário.`
     : reservando ? `Reservando ${s.mb ? `${(s.mb / 1024).toFixed(1).replace(".", ",")} GB` : "a memória livre"}. Isso leva alguns segundos.`
     : "Pode deixar o PC sozinho. Não abra jogos nem programas pesados até terminar.";
@@ -326,9 +328,13 @@ function telaMemoria() {
   const rodando = !!st?.rodando, terminou = !!st && !st.rodando && ["passou", "falhou"].includes(st.resultado);
   if (rodando || terminou) {
     const comErro = (st.erros || 0) > 0 || st.resultado === "falhou";
-    return { chave: "m-testar-rodando", ...topo(3, 3),
+    // rede de segurança: se o resultado já foi salvo e a tela não andou, este botão relê o estado
+    // (e, se a etapa ainda estiver esperando, registra o resultado do teste que acabou)
+    const podeSeguir = terminou && st.registrado !== false;
+    return { chave: `m-testar-${podeSeguir ? "fim" : "rodando"}`, ...topo(3, 3),
       titulo: comErro ? "O teste encontrou erros" : terminou ? "Teste concluído" : "Testando a memória",
-      html: `<div id="ass-teste" class="ass-teste"></div>` };
+      html: `<div id="ass-teste" class="ass-teste"></div>`,
+      primario: podeSeguir ? ["Continuar", seguirDepoisDoTesteMem] : null };
   }
   return { chave: "m-testar-parado", ...topo(3, 3),
     titulo: "A BIOS aceitou. Agora o teste",
@@ -339,6 +345,17 @@ function telaMemoria() {
       if (await confirmar("Travou?", "O ajuste será reprovado e o RyzenTune volta ao último valor bom.", "Sim, travou"))
         chamar("mem_resultado", false, "o PC travou (informado por você)");
     }]] };
+}
+
+async function seguirDepoisDoTesteMem() {
+  const st = S.teste;
+  const e = await api.obter_estado();
+  if (!e || e.erro) { aviso("Não consegui ler o estado. Feche e abra o RyzenTune.", "erro"); return; }
+  S.estado = e;
+  if (e.mem.teste?.situacao === "testar" && st && ["passou", "falhou"].includes(st.resultado))
+    await chamar("mem_resultado", st.resultado === "passou", st.msg || "");
+  S.teste = null;
+  desenhar();
 }
 
 function telaMemoriaPronta() {

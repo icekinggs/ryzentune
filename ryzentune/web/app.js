@@ -488,20 +488,21 @@ async function laçoTeste() {
   while (true) {
     try {
       const s = await api.teste_status();
-      if (s && !s.erro && (s.rodando || estavaRodando)) {
+      // "ativo" = rodando ou terminou mas o resultado ainda está sendo salvo (registrado === false)
+      const ativo = !!s && !s.erro && (s.rodando || s.registrado === false);
+      if (s && !s.erro && (ativo || estavaRodando)) {
         S.teste = s;
         desenharPainelTeste();
         desenharTeste($("#etapa-teste"), s);
         desenharTeste($("#cpu-teste"), s);
-        if (S.pagina === "assistente") { if ($("#ass-teste") && s.rodando) { if (s.tipo === "memoria") desenharTesteAssistente($("#ass-teste"), s); else desenharTeste($("#ass-teste"), s); } else desenharAssistente(); }
-        if (estavaRodando && !s.rodando) {
+        if (S.pagina === "assistente") { if ($("#ass-teste") && ativo) { if (s.tipo === "memoria") desenharTesteAssistente($("#ass-teste"), s); else desenharTeste($("#ass-teste"), s); } else desenharAssistente(); }
+        if (estavaRodando && !ativo) {
           aviso(s.resultado === "passou" ? "Teste concluído sem erros." : s.resultado === "falhou" ? `O teste falhou. ${s.msg || ""}` : "Teste parado.",
             s.resultado === "passou" ? "ok" : s.resultado === "falhou" ? "erro" : "");
-          await espera(400);
           const e = await api.obter_estado();
           if (e && !e.erro) { S.estado = e; desenhar(); }
         }
-        estavaRodando = s.rodando;
+        estavaRodando = ativo;
       }
     } catch (_) { /* segue */ }
     await espera(estavaRodando ? 700 : 2000);

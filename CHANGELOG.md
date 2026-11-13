@@ -3,6 +3,14 @@
 Formato: cada versão tem uma seção `## [X.Y.Z] - AAAA-MM-DD`. O texto da seção vira a descrição da
 release no GitHub e aparece no aviso de atualização do app.
 
+## [2.2.1] - 2026-11-12
+
+Correção: a tela ficava parada em "Teste concluído" depois que o teste da memória terminava.
+
+- O teste passava e o resultado era salvo, mas a tela relia o estado cedo demais e não avançava.
+  Agora ela espera o resultado ser salvo (aparece "Salvando o resultado…") e só então segue.
+- Se ainda assim parar, a tela "Teste concluído" tem o botão "Continuar".
+
 ## [2.2.0] - 2026-11-12
 
 Telas novas no assistente da memória.

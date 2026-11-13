@@ -231,11 +231,21 @@ class _Base:
         with self._lock:
             return dict(self.status)
 
+    def _avisar_fim(self, ao_terminar):
+        """Chama o callback e só então marca 'registrado': a tela espera isso antes de reler o estado."""
+        try:
+            if ao_terminar:
+                ao_terminar(self.obter())
+        finally:
+            with self._lock:
+                self.status["registrado"] = True
+
 
 class TesteMemoria(_Base):
     def iniciar(self, mb: int, minutos: float, ao_terminar=None):
         self.status = {"rodando": True, "tipo": "memoria", "mb": mb, "minutos": minutos, "fracao": 0,
-                       "erros": 0, "ciclo": 0, "gbps": 0, "padrao": "", "resultado": None, "inicio": time.time()}
+                       "erros": 0, "ciclo": 0, "gbps": 0, "padrao": "", "resultado": None,
+                       "registrado": False, "inicio": time.time()}
 
         def rodar():
             try:
@@ -263,8 +273,7 @@ class TesteMemoria(_Base):
                 else:
                     s["resultado"] = "passou" if s.get("erros", 0) == 0 else "falhou"
                     s["fracao"] = 1.0
-            if ao_terminar:
-                ao_terminar(self.obter())
+            self._avisar_fim(ao_terminar)
         threading.Thread(target=rodar, daemon=True).start()
 
 
@@ -272,7 +281,8 @@ class TesteNucleos(_Base):
     def iniciar(self, nucleos: list[int], segundos_por_nucleo: float, ao_terminar=None):
         """nucleos = CPUs lógicas a testar (uma por núcleo físico)."""
         self.status = {"rodando": True, "tipo": "nucleos", "nucleos": {str(c): "fila" for c in nucleos},
-                       "atual": None, "fracao": 0, "erros": 0, "resultado": None, "inicio": time.time()}
+                       "atual": None, "fracao": 0, "erros": 0, "resultado": None,
+                       "registrado": False, "inicio": time.time()}
 
         def rodar():
             try:
@@ -284,8 +294,7 @@ class TesteNucleos(_Base):
             except Exception as ex:
                 with self._lock:
                     self.status.update(rodando=False, resultado="falhou", msg=str(ex))
-                if ao_terminar:
-                    ao_terminar(self.obter())
+                self._avisar_fim(ao_terminar)
                 return
             for i, cpu in enumerate(nucleos):
                 if self.parado:
@@ -321,8 +330,7 @@ class TesteNucleos(_Base):
                 s["resultado"] = "parado" if self.parado else ("passou" if s["erros"] == 0 else "falhou")
                 if not self.parado:
                     s["fracao"] = 1.0
-            if ao_terminar:
-                ao_terminar(self.obter())
+            self._avisar_fim(ao_terminar)
         threading.Thread(target=rodar, daemon=True).start()
 
 

@@ -6,7 +6,7 @@ from ryzentune import testes
 
 def esperar(t, limite=120):
     fim = time.time() + limite
-    while t.obter()["rodando"] and time.time() < fim:
+    while (t.obter()["rodando"] or t.obter().get("registrado") is False) and time.time() < fim:
         time.sleep(0.2)
     return t.obter()
 
@@ -22,6 +22,30 @@ def test_memoria_curta_passa():
     s = esperar(t)
     assert s["resultado"] == "passou", s
     assert s["erros"] == 0 and s["ciclo"] >= 1 and fim["resultado"] == "passou"
+
+
+def test_registrado_so_depois_do_callback():
+    """A tela só relê o estado quando registrado=True; o callback (salvar o resultado) pode demorar."""
+    t = testes.TesteMemoria()
+    visto = {}
+
+    def lento(s):
+        visto["durante"] = t.obter()["registrado"]
+        time.sleep(1.5)
+
+    t.iniciar(256, 0.05, lento)
+    s = esperar(t)
+    assert visto["durante"] is False and s["registrado"] is True
+
+
+def test_registrado_mesmo_se_callback_falhar():
+    t = testes.TesteMemoria()
+
+    def quebra(s):
+        raise RuntimeError("falhou de propósito")
+
+    t.iniciar(256, 0.05, quebra)
+    assert esperar(t)["registrado"] is True
 
 
 def test_memoria_parar():
